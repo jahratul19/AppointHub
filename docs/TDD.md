@@ -219,3 +219,38 @@ Verify that unauthorized users cannot access protected endpoints or modify resou
 ## 12. Future Enhancements
 
 Potential future enhancements include appointment reminders, notifications, payment integration, and reporting. These features are outside the initial implementation scope unless approved separately.
+## 13. Project Structure
+
+The project will be organized into separate frontend and backend directories to maintain a clear separation of responsibilities and improve maintainability.
+
+```text
+AppointHUB/
+├── docs/
+│   ├── PRD.md
+│   ├── SRS.md
+│   └── TDD.md
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   ├── types/
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── public/
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── backend/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── core/
+│   │   └── main.py
+│   └── requirements.txt
+│
+├── .gitignore
+└── README.md
