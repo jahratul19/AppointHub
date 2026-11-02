@@ -122,17 +122,17 @@ The system shall validate incoming data and maintain consistent appointment and 
 
 | Method | Endpoint                                | Purpose                                  |
 | ------ | --------------------------------------- | ---------------------------------------- |
-| POST   | `/auth/register`                        | Register a customer                      |
-| POST   | `/auth/token`                           | Authenticate and obtain an access token  |
-| GET    | `/auth/me`                              | Retrieve the current user's profile      |
-| GET    | `/providers`                            | List service providers                   |
-| GET    | `/providers/{provider_id}/slots`        | View available appointment slots         |
-| POST   | `/appointments`                         | Book an appointment                      |
-| GET    | `/appointments/mine`                    | View the current customer's appointments |
-| PATCH  | `/appointments/{appointment_id}/cancel` | Cancel an eligible appointment           |
-| GET    | `/provider/appointments`                | View the provider's appointments         |
-| POST   | `/provider/availability`                | Create provider availability             |
-| GET    | `/admin/users`                          | List users for authorized administrators |
+| POST   | `/api/v1/auth/register`                        | Register a customer                      |
+| POST   | `/api/v1/auth/token`                           | Authenticate and obtain an access token  |
+| GET    | `/api/v1/auth/me`                              | Retrieve the current user's profile      |
+| GET    | `/api/v1/providers`                            | List service providers                   |
+| GET    | `/api/v1/providers/{provider_id}/slots`        | View available appointment slots         |
+| POST   | `/api/v1/appointments`                         | Book an appointment                      |
+| GET    | `/api/v1/appointments/mine`                    | View the current customer's appointments |
+| PATCH  | `/api/v1/appointments/{appointment_id}/cancel` | Cancel an eligible appointment           |
+| GET    | `/api/v1/provider/appointments`                | View the provider's appointments         |
+| POST   | `/api/v1/provider/availability`                | Create provider availability             |
+| GET    | `/api/v1/admin/users`                          | List users for authorized administrators |
 
 These endpoints describe the proposed API design and may be refined during implementation.
 
