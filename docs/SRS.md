@@ -167,3 +167,122 @@ Error responses should provide clear messages without exposing sensitive system 
 * The system prevents conflicting bookings.
 * Protected resources enforce authentication, roles, permissions, and ownership checks.
 * Invalid requests return appropriate error responses.
+## 10. Use Cases
+
+### UC-01: User Registration
+
+* **Primary Actor:** Visitor
+* **Precondition:** The visitor does not already have an account.
+* **Main Flow:**
+  1. The visitor opens the registration page.
+  2. The visitor enters the required registration information.
+  3. The frontend sends the registration request to the backend.
+  4. The backend validates the information.
+  5. The system creates the user account and returns a success response.
+* **Alternative Flow:** If the information is invalid or the account already exists, the system returns an appropriate error message.
+* **Postcondition:** A new customer account is created successfully.
+
+### UC-02: User Login
+
+* **Primary Actor:** Registered User
+* **Precondition:** The user has a registered account.
+* **Main Flow:**
+  1. The user opens the login page.
+  2. The user enters their login credentials.
+  3. The frontend sends the credentials to the backend.
+  4. The backend verifies the credentials.
+  5. The system returns an authentication response.
+* **Alternative Flow:** If the credentials are invalid, the system returns an authentication error.
+* **Postcondition:** The user is authenticated and can access authorized features.
+
+### UC-03: View Service Providers
+
+* **Primary Actor:** Customer
+* **Precondition:** The application is accessible.
+* **Main Flow:**
+  1. The customer opens the service provider listing page.
+  2. The frontend requests the provider list from the backend.
+  3. The backend retrieves the available service providers.
+  4. The frontend displays the provider information.
+* **Alternative Flow:** If no providers are available, the system displays an appropriate message.
+* **Postcondition:** The customer can view available service providers.
+
+### UC-04: View Available Appointment Slots
+
+* **Primary Actor:** Customer
+* **Precondition:** The selected service provider has availability information.
+* **Main Flow:**
+  1. The customer selects a service provider.
+  2. The frontend requests the provider's available appointment slots.
+  3. The backend retrieves the available slots.
+  4. The frontend displays the available appointment slots.
+* **Alternative Flow:** If no appointment slots are available, the system displays an appropriate message.
+* **Postcondition:** The customer can view available appointment slots.
+
+### UC-05: Manage Provider Availability
+
+* **Primary Actor:** Service Provider
+* **Precondition:** The service provider is authenticated and authorized.
+* **Main Flow:**
+  1. The service provider opens the availability management page.
+  2. The provider enters or updates availability information.
+  3. The frontend sends the request to the backend.
+  4. The backend validates the information and authorization.
+  5. The system saves the availability information.
+* **Alternative Flow:** If the information is invalid or permission is denied, the system returns an appropriate error.
+* **Postcondition:** The provider's availability is created or updated successfully.
+
+### UC-06: Book an Appointment
+
+* **Primary Actor:** Customer
+* **Precondition:** The customer is authenticated and the selected appointment slot is available.
+* **Main Flow:**
+  1. The customer selects a service provider and an available appointment slot.
+  2. The customer submits the booking request.
+  3. The frontend sends the request to the backend.
+  4. The backend validates the request and checks slot availability.
+  5. The backend creates the appointment.
+  6. The system returns a booking confirmation.
+* **Alternative Flow:** If the selected slot is already booked or the request is invalid, the system returns an appropriate error.
+* **Postcondition:** The appointment is successfully booked.
+
+### UC-07: View Appointments
+
+* **Primary Actor:** Customer or Service Provider
+* **Precondition:** The user is authenticated.
+* **Main Flow:**
+  1. The user opens the appointment management page.
+  2. The frontend requests the relevant appointment records.
+  3. The backend verifies the user's identity and permissions.
+  4. The backend retrieves the authorized appointment records.
+  5. The frontend displays the appointment information.
+* **Alternative Flow:** If no appointments are found, the system displays an appropriate message.
+* **Postcondition:** The user can view appointments they are authorized to access.
+
+### UC-08: Cancel an Appointment
+
+* **Primary Actor:** Customer
+* **Precondition:** The customer is authenticated and owns an eligible appointment.
+* **Main Flow:**
+  1. The customer opens their appointment list.
+  2. The customer selects an eligible appointment.
+  3. The customer confirms the cancellation.
+  4. The frontend sends the cancellation request to the backend.
+  5. The backend verifies ownership and cancellation rules.
+  6. The system processes the cancellation and returns a response.
+* **Alternative Flow:** If the appointment does not exist, is not eligible for cancellation, or belongs to another user, the system returns an appropriate error.
+* **Postcondition:** The eligible appointment is cancelled successfully.
+
+### UC-09: Manage User Accounts and Roles
+
+* **Primary Actor:** Administrator
+* **Precondition:** The administrator is authenticated and has the required permissions.
+* **Main Flow:**
+  1. The administrator opens the user management page.
+  2. The frontend requests the user records from the backend.
+  3. The backend verifies administrative permissions.
+  4. The system displays the authorized user information.
+  5. The administrator performs an authorized user or role management action.
+  6. The backend validates and processes the requested action.
+* **Alternative Flow:** If the administrator lacks permission or the requested information is invalid, the system returns an appropriate error.
+* **Postcondition:** The authorized user-management action is completed successfully.
