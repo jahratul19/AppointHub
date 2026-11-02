@@ -72,3 +72,61 @@ The initial version will focus on user accounts, provider availability, appointm
 ## 10. Assumptions
 
 This document describes the planned requirements for the initial version of AppointHUB. Features and implementation details may be refined during development.
+## 11. User Stories
+
+### 11.1 Customer
+
+* As a customer, I want to register an account so that I can use the appointment booking system.
+* As a customer, I want to log in securely so that I can access my personal account.
+* As a customer, I want to browse service providers so that I can choose a suitable provider.
+* As a customer, I want to view available appointment slots so that I can select a convenient time.
+* As a customer, I want to book an appointment so that I can reserve a service.
+* As a customer, I want to view my appointment history so that I can track my bookings.
+* As a customer, I want to update or cancel my appointments so that I can manage changes to my schedule.
+
+### 11.2 Service Provider
+
+* As a service provider, I want to log in securely so that I can access my provider account.
+* As a service provider, I want to manage my availability so that customers can book suitable time slots.
+* As a service provider, I want to view my assigned appointments so that I can manage my schedule.
+
+### 11.3 Administrator
+
+* As an administrator, I want to manage user accounts so that I can maintain the platform.
+* As an administrator, I want to assign appropriate user roles so that access is controlled.
+* As an administrator, I want to oversee platform access so that unauthorized activities can be restricted.
+
+## 12. Project Milestones
+
+### Milestone 1: Requirement Analysis and Planning
+
+* Define project objectives, scope, and target users.
+* Identify functional and non-functional requirements.
+* Prepare PRD, SRS, and TDD documentation.
+
+### Milestone 2: Backend Development
+
+* Set up the FastAPI backend.
+* Design database models and relationships.
+* Implement authentication and authorization.
+* Develop REST API endpoints for the required features.
+
+### Milestone 3: Frontend Development
+
+* Set up the React.js and TypeScript frontend.
+* Develop user authentication interfaces.
+* Build service provider listing and appointment management interfaces.
+* Implement role-based frontend access.
+
+### Milestone 4: Frontend and Backend Integration
+
+* Connect frontend components with backend REST APIs.
+* Implement appointment booking and management workflows.
+* Handle API responses, validation, and errors.
+
+### Milestone 5: Testing and Deployment
+
+* Test CRUD operations and API endpoints.
+* Verify authentication, authorization, and role-based permissions.
+* Fix identified bugs.
+* Deploy the application and verify its functionality.
