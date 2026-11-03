@@ -1,5 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from .database import get_db
@@ -17,13 +18,48 @@ from .security import (
     hash_password,
     verify_password,
     create_access_token,
+    decode_access_token,
 )
 
 router = APIRouter(prefix="/api", tags=["AppointHUB"])
 
+bearer_scheme = HTTPBearer()
 
 
-# CREATE
+# JWT VERIFICATION
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+):
+    token = credentials.credentials
+
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = decode_access_token(token)
+        user_id = payload.get("sub")
+
+        if user_id is None:
+            raise credentials_exception
+
+        user_id = int(user_id)
+
+    except (ValueError, TypeError):
+        raise credentials_exception
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
+# CREATE APPOINTMENT - PROTECTED
 @router.post(
     "/appointments/",
     response_model=AppointmentResponse,
@@ -32,15 +68,18 @@ router = APIRouter(prefix="/api", tags=["AppointHUB"])
 def create_appointment(
     appointment: AppointmentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     db_appointment = Appointment(**appointment.model_dump())
+
     db.add(db_appointment)
     db.commit()
     db.refresh(db_appointment)
+
     return db_appointment
 
 
-# READ ALL
+# READ ALL APPOINTMENTS
 @router.get(
     "/appointments/",
     response_model=list[AppointmentResponse],
@@ -49,7 +88,7 @@ def get_appointments(db: Session = Depends(get_db)):
     return db.query(Appointment).all()
 
 
-# READ SINGLE
+# READ SINGLE APPOINTMENT
 @router.get(
     "/appointments/{appointment_id}",
     response_model=AppointmentResponse,
@@ -71,7 +110,7 @@ def get_appointment(
     return appointment
 
 
-# UPDATE
+# UPDATE APPOINTMENT
 @router.put(
     "/appointments/{appointment_id}",
     response_model=AppointmentResponse,
@@ -96,10 +135,11 @@ def update_appointment(
 
     db.commit()
     db.refresh(appointment)
+
     return appointment
 
 
-# DELETE
+# DELETE APPOINTMENT
 @router.delete("/appointments/{appointment_id}")
 def delete_appointment(
     appointment_id: int,
@@ -121,6 +161,7 @@ def delete_appointment(
     return {"message": "Appointment deleted successfully"}
 
 
+# USER REGISTRATION
 @router.post(
     "/auth/register",
     response_model=UserResponse,
@@ -155,7 +196,7 @@ def register_user(
     return new_user
 
 
-
+# USER LOGIN
 @router.post(
     "/auth/login",
     response_model=TokenResponse,
