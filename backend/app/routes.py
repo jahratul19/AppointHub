@@ -1,8 +1,6 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from .schemas import UserLogin, TokenResponse
-from .security import verify_password, create_access_token
 
 from .database import get_db
 from .models import Appointment, User
@@ -11,11 +9,18 @@ from .schemas import (
     AppointmentUpdate,
     AppointmentResponse,
     UserCreate,
+    UserLogin,
     UserResponse,
+    TokenResponse,
 )
-from .security import hash_password
+from .security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+)
 
 router = APIRouter(prefix="/api", tags=["AppointHUB"])
+
 
 
 # CREATE
@@ -36,26 +41,41 @@ def create_appointment(
 
 
 # READ ALL
-@router.get("/appointments/", response_model=list[AppointmentResponse])
+@router.get(
+    "/appointments/",
+    response_model=list[AppointmentResponse],
+)
 def get_appointments(db: Session = Depends(get_db)):
     return db.query(Appointment).all()
 
 
 # READ SINGLE
-@router.get("/appointments/{appointment_id}", response_model=AppointmentResponse)
-def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
+@router.get(
+    "/appointments/{appointment_id}",
+    response_model=AppointmentResponse,
+)
+def get_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+):
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id
     ).first()
 
     if appointment is None:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found",
+        )
 
     return appointment
 
 
 # UPDATE
-@router.put("/appointments/{appointment_id}", response_model=AppointmentResponse)
+@router.put(
+    "/appointments/{appointment_id}",
+    response_model=AppointmentResponse,
+)
 def update_appointment(
     appointment_id: int,
     updated_data: AppointmentUpdate,
@@ -66,7 +86,10 @@ def update_appointment(
     ).first()
 
     if appointment is None:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found",
+        )
 
     for key, value in updated_data.model_dump().items():
         setattr(appointment, key, value)
@@ -78,13 +101,19 @@ def update_appointment(
 
 # DELETE
 @router.delete("/appointments/{appointment_id}")
-def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
+def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+):
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id
     ).first()
 
     if appointment is None:
-        raise HTTPException(status_code=404, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found",
+        )
 
     db.delete(appointment)
     db.commit()
@@ -124,6 +153,7 @@ def register_user(
     db.refresh(new_user)
 
     return new_user
+
 
 
 @router.post(
