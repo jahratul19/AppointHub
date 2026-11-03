@@ -89,8 +89,22 @@ export default function App() {
       })
 
       if (!response.ok) {
-        const detail = await response.json()
-        throw new Error(detail.detail || "Request failed")
+  const responseText = await response.text()
+  let errorMessage = "Request failed"
+
+  if (responseText) {
+    try {
+      const detail = JSON.parse(responseText)
+      errorMessage = detail.detail || errorMessage
+    } catch {
+      errorMessage = responseText
+    }
+  }
+
+  throw new Error(errorMessage)
+
+        
+        
       }
 
       setMessage(editingId ? "Appointment updated successfully!" : "Appointment created successfully!")
