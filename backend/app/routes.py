@@ -1,20 +1,24 @@
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import Appointment
+from .models import Appointment, User
 from .schemas import (
     AppointmentCreate,
     AppointmentUpdate,
     AppointmentResponse,
+    UserCreate,
+    UserResponse,
 )
+from .security import hash_password
 
-router = APIRouter(prefix="/api/appointments", tags=["Appointments"])
+router = APIRouter(prefix="/api", tags=["AppointHUB"])
 
 
 # CREATE
 @router.post(
-    "/",
+    "/appointments/",
     response_model=AppointmentResponse,
     status_code=status.HTTP_201_CREATED,
 )
@@ -30,13 +34,13 @@ def create_appointment(
 
 
 # READ ALL
-@router.get("/", response_model=list[AppointmentResponse])
+@router.get("/appointments/", response_model=list[AppointmentResponse])
 def get_appointments(db: Session = Depends(get_db)):
     return db.query(Appointment).all()
 
 
 # READ SINGLE
-@router.get("/{appointment_id}", response_model=AppointmentResponse)
+@router.get("/appointments/{appointment_id}", response_model=AppointmentResponse)
 def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id
@@ -49,7 +53,7 @@ def get_appointment(appointment_id: int, db: Session = Depends(get_db)):
 
 
 # UPDATE
-@router.put("/{appointment_id}", response_model=AppointmentResponse)
+@router.put("/appointments/{appointment_id}", response_model=AppointmentResponse)
 def update_appointment(
     appointment_id: int,
     updated_data: AppointmentUpdate,
@@ -71,7 +75,7 @@ def update_appointment(
 
 
 # DELETE
-@router.delete("/{appointment_id}")
+@router.delete("/appointments/{appointment_id}")
 def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
     appointment = db.query(Appointment).filter(
         Appointment.id == appointment_id
@@ -84,3 +88,37 @@ def delete_appointment(appointment_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Appointment deleted successfully"}
+
+
+@router.post(
+    "/auth/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Authentication"],
+)
+def register_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_db),
+):
+    existing_user = db.query(User).filter(
+        (User.username == user_data.username)
+        | (User.email == user_data.email)
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email already registered",
+        )
+
+    new_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hash_password(user_data.password),
+    )
+
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
