@@ -1,7 +1,9 @@
+
 import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
 
 password_hash = PasswordHash.recommended()
@@ -22,7 +24,7 @@ def hash_password(password: str) -> str:
 
 def verify_password(
     plain_password: str,
-    hashed_password: str
+    hashed_password: str,
 ) -> bool:
     """Verify a password against its hash."""
     return password_hash.verify(plain_password, hashed_password)
@@ -30,7 +32,7 @@ def verify_password(
 
 def create_access_token(
     data: dict,
-    expires_delta: timedelta | None = None
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
@@ -43,13 +45,20 @@ def create_access_token(
 
     to_encode.update({"exp": expire})
 
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(
+        to_encode,
+        SECRET_KEY,
+        algorithm=ALGORITHM,
+    )
 
 
 def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT access token."""
-    return jwt.decode(
-        token,
-        SECRET_KEY,
-        algorithms=[ALGORITHM]
-    )
+    try:
+        return jwt.decode(
+            token,
+            SECRET_KEY,
+            algorithms=[ALGORITHM],
+        )
+    except InvalidTokenError as error:
+        raise ValueError("Invalid or expired access token.") from error
