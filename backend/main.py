@@ -1,8 +1,16 @@
-from pathlib import Path
-
 from fastapi import FastAPI
 
-app = FastAPI(title="FastAPI + React")
+from app.database import Base, engine
+from app.routes import router as appointment_router
+from app import models
+
+app = FastAPI(title="AppointHUB API")
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
+
+# Register Appointment CRUD routes
+app.include_router(appointment_router)
 
 
 @app.get("/api/health")
@@ -13,25 +21,3 @@ def health() -> dict[str, str]:
 @app.get("/api/hello")
 def hello(name: str = "World") -> dict[str, str]:
     return {"message": f"Hello, {name}!"}
-
-
-# EXERCISE (part 1): uncomment to add POST /api/user, then test it at /docs.
-# from pydantic import BaseModel, EmailStr
-#
-#
-# class User(BaseModel):
-#     id: int
-#     name: str
-#     email: EmailStr  # invalid emails get a 422 response automatically
-#
-#
-# @app.post("/api/user")
-# def create_user(user: User) -> dict[str, str]:
-#     return {"message": f"Hello {user.name} (ID {user.id}), we'll email you at {user.email}."}
-
-
-FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
-
-# dist/ only exists after `npm run build`; in dev the Vite server serves the UI.
-if FRONTEND_DIR.is_dir():
-    app.frontend("/", directory=FRONTEND_DIR)
