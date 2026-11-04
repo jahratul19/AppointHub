@@ -63,6 +63,8 @@ Try an invalid email (send it from `/docs`, since the browser blocks it in the f
 
 Every push to `main` redeploys automatically. Or deploy from your machine with `vercel --prod`.
 
+If the frontend and backend are deployed on different domains, set `VITE_API_BASE_URL` in the frontend deployment to the backend origin (for example, `https://appoint-hub-wauz.vercel.app`) and set `FRONTEND_ORIGINS` in the backend deployment to the frontend origin. For local development, leave `VITE_API_BASE_URL` unset; Vite proxies `/api` to the local backend.
+
 ## Troubleshooting
 
 - **"Running scripts is disabled" in PowerShell:** run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.

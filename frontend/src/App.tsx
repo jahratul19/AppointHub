@@ -21,8 +21,9 @@ type AppointmentForm = {
 type Page = "overview" | "appointments" | "help"
 type AuthMode = "login" | "register"
 
-const API_URL = "/api/appointments/"
-const AUTH_URL = "/api/auth"
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
+const API_URL = `${API_BASE_URL}/api/appointments/`
+const AUTH_URL = `${API_BASE_URL}/api/auth`
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
