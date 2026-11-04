@@ -9,7 +9,7 @@ from app import models
 
 app = FastAPI(title="AppointHUB API")
 
-allowed_origins = ["http://localhost:5173","https://appointhub-4lcd2mszs-jahratul19.vercel.app"]
+allowed_origins = ["http://localhost:5173","https://appoint-hub-qgh2.vercel.app"]
 allowed_origins.extend(
     origin.strip()
     for origin in os.getenv("FRONTEND_ORIGINS", "").split(",")
