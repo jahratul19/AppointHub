@@ -1,11 +1,13 @@
-
+import {
+  getAppointments,
+  authenticate,
+  saveAppointment,
+  getAppointment,
+  deleteAppointment as deleteAppointmentApi,
+} from "./services/api"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
-const API_URL = `${API_BASE_URL}/api/appointments/`
-const AUTH_URL = `${API_BASE_URL}/api/auth`
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -44,7 +46,7 @@ export default function App() {
     setError("")
 
     try {
-      const response = await fetch(API_URL)
+      const response = await getAppointments()
 
       if (!response.ok) {
         throw new Error("Could not load appointments")
@@ -73,28 +75,17 @@ export default function App() {
     setMessage("")
     setAuthLoading(true)
 
-    const endpoint =
-      authMode === "register"
-        ? `${AUTH_URL}/register`
-        : `${AUTH_URL}/login`
-
+    
     const payload =
-      authMode === "register"
-        ? { username, email, password }
-        : { email, password }
+  authMode === "register"
+    ? { username, email, password }
+    : { email, password }
 
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
+try {
+  const response = await authenticate(authMode, payload)
 
-      const responseText = await response.text()
-      const data = responseText ? JSON.parse(responseText) : {}
-
+  const responseText = await response.text()
+  const data = responseText ? JSON.parse(responseText) : {}
       if (!response.ok) {
         throw new Error(
           data.detail || "Authentication failed. Please try again."
@@ -158,21 +149,8 @@ export default function App() {
           : form.appointment_time,
     }
 
-    const url = editingId
-      ? `${API_URL}${editingId}`
-      : API_URL
-
-    const method = editingId ? "PUT" : "POST"
-
     try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      })
+      const response = await saveAppointment(editingId, token, payload)
 
       if (!response.ok) {
         const responseText = await response.text()
@@ -215,7 +193,7 @@ export default function App() {
     setError("")
 
     try {
-      const response = await fetch(`${API_URL}${id}`)
+      const response = await getAppointment(id)
 
       if (!response.ok) {
         throw new Error("Appointment not found")
@@ -262,9 +240,7 @@ export default function App() {
     setMessage("")
 
     try {
-      const response = await fetch(`${API_URL}${id}`, {
-        method: "DELETE",
-      })
+      const response = await deleteAppointmentApi(id)
 
       if (!response.ok) {
         throw new Error("Could not delete appointment")
