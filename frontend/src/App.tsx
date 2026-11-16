@@ -5,12 +5,12 @@ import {
   getAppointment,
   deleteAppointment as deleteAppointmentApi,
 } from "./services/api"
+import AppointmentsPage from "./pages/AppointmentsPage"
 import DashboardPage from "./pages/DashboardPage"
 import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
-
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -438,194 +438,26 @@ try {
 )}
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (
-          <>
-            <section className="welcome-section">
-              <div>
-                <span className="eyebrow">
-                  SCHEDULE MANAGEMENT
-                </span>
-                <h1>Manage your appointments.</h1>
-                <p>
-                  Create, update, view, and organize your appointments.
-                </p>
-              </div>
-
-              <button
-                className="primary-btn"
-                onClick={openNewForm}
-              >
-                ＋ New appointment
-              </button>
-            </section>
-
-            {showForm && (
-              <section className="form-card">
-                <div className="section-heading">
-                  <div>
-                    <span className="eyebrow">
-                      APPOINTMENT DETAILS
-                    </span>
-                    <h2>
-                      {editingId
-                        ? "Edit appointment"
-                        : "Create new appointment"}
-                    </h2>
-                    <p>Enter the information below.</p>
-                  </div>
-
-                  <button
-                    className="close-btn"
-                    onClick={cancelForm}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form
-                  onSubmit={handleSubmit}
-                  className="appointment-form"
-                >
-                  <label>
-                    Customer name
-                    <input
-                      name="customer_name"
-                      value={form.customer_name}
-                      onChange={handleChange}
-                      placeholder="Enter customer name"
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Provider name
-                    <input
-                      name="provider_name"
-                      value={form.provider_name}
-                      onChange={handleChange}
-                      placeholder="Enter provider name"
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Appointment date
-                    <input
-                      type="date"
-                      name="appointment_date"
-                      value={form.appointment_date}
-                      onChange={handleChange}
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Appointment time
-                    <input
-                      type="time"
-                      name="appointment_time"
-                      value={form.appointment_time}
-                      onChange={handleChange}
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Status
-                    <select
-                      name="status"
-                      value={form.status}
-                      onChange={handleChange}
-                    >
-                      <option>Pending</option>
-                      <option>Confirmed</option>
-                      <option>Completed</option>
-                      <option>Cancelled</option>
-                    </select>
-                  </label>
-
-                  <div className="form-actions">
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={cancelForm}
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="submit"
-                      className="primary-btn"
-                    >
-                      {editingId
-                        ? "Save changes"
-                        : "Create appointment"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            <section className="appointments-section">
-              <div className="section-heading">
-                <div>
-                  <span className="eyebrow">ALL RECORDS</span>
-                  <h2>All appointments</h2>
-                  <p>
-                    Search and manage your appointment records.
-                  </p>
-                </div>
-
-                <button
-                  className="secondary-btn"
-                  onClick={() => void loadAppointments()}
-                >
-                  ↻ Refresh
-                </button>
-              </div>
-
-              <div className="table-toolbar">
-                <input
-                  className="search-input"
-                  placeholder="Search customer or provider..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                >
-                  <option>All</option>
-                  <option>Pending</option>
-                  <option>Confirmed</option>
-                  <option>Completed</option>
-                  <option>Cancelled</option>
-                </select>
-              </div>
-
-              {loading ? (
-                <p className="empty-state">
-                  Loading appointments...
-                </p>
-              ) : filteredAppointments.length === 0 ? (
-                <div className="empty-state">
-                  <div>▤</div>
-                  <h3>No appointments found</h3>
-                  <p>
-                    Create an appointment or change your search.
-                  </p>
-                </div>
-              ) : (
-                <AppointmentTable
-                  items={filteredAppointments}
-                  onView={viewAppointment}
-                  onEdit={editAppointment}
-                  onDelete={deleteAppointment}
-                />
-              )}
-            </section>
-          </>
-        )}
+  <AppointmentsPage
+    form={form}
+    editingId={editingId}
+    showForm={showForm}
+    loading={loading}
+    search={search}
+    filter={filter}
+    filteredAppointments={filteredAppointments}
+    onNewAppointment={openNewForm}
+    onCancelForm={cancelForm}
+    onSubmit={handleSubmit}
+    onChange={handleChange}
+    onSearchChange={setSearch}
+    onFilterChange={setFilter}
+    onRefresh={() => void loadAppointments()}
+    onView={viewAppointment}
+    onEdit={editAppointment}
+    onDelete={deleteAppointment}
+  />
+)}
 
         {/* HELP PAGE */}
         {page === "help" && (
