@@ -5,9 +5,11 @@ import {
   getAppointment,
   deleteAppointment as deleteAppointmentApi,
 } from "./services/api"
+import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
+
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -275,105 +277,27 @@ try {
 
   // AUTHENTICATION SCREEN
   if (!token) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <div className="brand-icon">A</div>
-            <h1>AppointHUB</h1>
-            <p>YOUR APPOINTMENT MANAGEMENT PLATFORM</p>
-          </div>
-
-          <h2>
-            {authMode === "login"
-              ? "Welcome back"
-              : "Create your account"}
-          </h2>
-
-          <p className="auth-description">
-            {authMode === "login"
-              ? "Sign in to access your workspace."
-              : "Register to get started with AppointHUB."}
-          </p>
-
-          {message && (
-            <div className="success-message">{message}</div>
-          )}
-
-          {error && <div className="error">{error}</div>}
-
-          <form onSubmit={handleAuthSubmit} className="auth-form">
-            {authMode === "register" && (
-              <label>
-                Username
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  required
-                />
-              </label>
-            )}
-
-            <label>
-              Email address
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-              />
-            </label>
-
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-                minLength={8}
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="primary-btn"
-              disabled={authLoading}
-            >
-              {authLoading
-                ? "Please wait..."
-                : authMode === "login"
-                  ? "Sign in"
-                  : "Create account"}
-            </button>
-          </form>
-
-          <div className="auth-switch">
-            {authMode === "login"
-              ? "Don't have an account? "
-              : "Already have an account? "}
-
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode(
-                  authMode === "login" ? "register" : "login"
-                )
-                setError("")
-                setMessage("")
-              }}
-            >
-              {authMode === "login" ? "Register" : "Login"}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  return (
+    <AuthPage
+      authMode={authMode}
+      username={username}
+      email={email}
+      password={password}
+      authLoading={authLoading}
+      message={message}
+      error={error}
+      onSubmit={handleAuthSubmit}
+      onUsernameChange={setUsername}
+      onEmailChange={setEmail}
+      onPasswordChange={setPassword}
+      onToggleMode={() => {
+        setAuthMode(authMode === "login" ? "register" : "login")
+        setError("")
+        setMessage("")
+      }}
+    />
+  )
+}
 
   // DASHBOARD DATA
   const today = new Date().toISOString().slice(0, 10)
