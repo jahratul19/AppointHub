@@ -5,6 +5,7 @@ import {
   getAppointment,
   deleteAppointment as deleteAppointmentApi,
 } from "./services/api"
+import DashboardPage from "./pages/DashboardPage"
 import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
@@ -421,111 +422,20 @@ try {
 
         {/* OVERVIEW PAGE */}
         {page === "overview" && (
-          <>
-            <section className="welcome-section">
-              <div>
-                <span className="eyebrow">
-                  YOUR DAILY SNAPSHOT
-                </span>
-                <h1>Everything in one place.</h1>
-                <p>
-                  Keep track of your schedule and stay on top
-                  of every appointment.
-                </p>
-              </div>
-
-              <button
-                className="primary-btn"
-                onClick={openNewForm}
-              >
-                ＋ New appointment
-              </button>
-            </section>
-
-            <section className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Total appointments</span>
-                  <span className="stat-icon purple">▤</span>
-                </div>
-                <h2>{appointments.length}</h2>
-                <small>All recorded appointments</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Pending</span>
-                  <span className="stat-icon orange">◷</span>
-                </div>
-                <h2>{pending}</h2>
-                <small>Waiting for confirmation</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Confirmed</span>
-                  <span className="stat-icon green">✓</span>
-                </div>
-                <h2>{confirmed}</h2>
-                <small>Ready for appointment</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Completed</span>
-                  <span className="stat-icon blue">▣</span>
-                </div>
-                <h2>{completed}</h2>
-                <small>Successfully completed</small>
-              </div>
-            </section>
-
-            <section className="appointments-section">
-              <div className="section-heading">
-                <div>
-                  <span className="eyebrow">YOUR SCHEDULE</span>
-                  <h2>Recent appointments</h2>
-                  <p>
-                    Your five most recently added appointments.
-                  </p>
-                </div>
-
-                <button
-                  className="secondary-btn"
-                  onClick={() => setPage("appointments")}
-                >
-                  View all →
-                </button>
-              </div>
-
-              {loading ? (
-                <p className="empty-state">
-                  Loading appointments...
-                </p>
-              ) : recentAppointments.length === 0 ? (
-                <div className="empty-state">
-                  <div>▤</div>
-                  <h3>Your schedule is clear</h3>
-                  <p>Create your first appointment to get started.</p>
-                  <button
-                    className="primary-btn"
-                    onClick={openNewForm}
-                  >
-                    ＋ Create appointment
-                  </button>
-                </div>
-              ) : (
-                <AppointmentTable
-                  items={recentAppointments}
-                  onView={viewAppointment}
-                  onEdit={editAppointment}
-                  onDelete={deleteAppointment}
-                />
-              )}
-            </section>
-          </>
-        )}
-
+  <DashboardPage
+    appointments={appointments}
+    pending={pending}
+    confirmed={confirmed}
+    completed={completed}
+    recentAppointments={recentAppointments}
+    loading={loading}
+    onNewAppointment={openNewForm}
+    onView={viewAppointment}
+    onEdit={editAppointment}
+    onDelete={deleteAppointment}
+    onViewAll={() => setPage("appointments")}
+  />
+)}
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (
           <>
