@@ -1,29 +1,17 @@
-
+import {
+  getAppointments,
+  authenticate,
+  saveAppointment,
+  getAppointment,
+  deleteAppointment as deleteAppointmentApi,
+} from "./services/api"
+import HelpPage from "./pages/HelpPage"
+import AppointmentsPage from "./pages/AppointmentsPage"
+import DashboardPage from "./pages/DashboardPage"
+import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
-
-type Appointment = {
-  id: number
-  customer_name: string
-  provider_name: string
-  appointment_date: string
-  appointment_time: string
-  status: string
-}
-
-type AppointmentForm = {
-  customer_name: string
-  provider_name: string
-  appointment_date: string
-  appointment_time: string
-  status: string
-}
-
-type Page = "overview" | "appointments" | "help"
-type AuthMode = "login" | "register"
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "")
-const API_URL = `${API_BASE_URL}/api/appointments/`
-const AUTH_URL = `${API_BASE_URL}/api/auth`
+import AppointmentTable from "./components/AppointmentTable"
+import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -31,6 +19,7 @@ const emptyForm: AppointmentForm = {
   appointment_date: "",
   appointment_time: "",
   status: "Pending",
+
 }
 
 export default function App() {
@@ -61,7 +50,7 @@ export default function App() {
     setError("")
 
     try {
-      const response = await fetch(API_URL)
+      const response = await getAppointments()
 
       if (!response.ok) {
         throw new Error("Could not load appointments")
@@ -90,28 +79,17 @@ export default function App() {
     setMessage("")
     setAuthLoading(true)
 
-    const endpoint =
-      authMode === "register"
-        ? `${AUTH_URL}/register`
-        : `${AUTH_URL}/login`
-
+    
     const payload =
-      authMode === "register"
-        ? { username, email, password }
-        : { email, password }
+  authMode === "register"
+    ? { username, email, password }
+    : { email, password }
 
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      })
+try {
+  const response = await authenticate(authMode, payload)
 
-      const responseText = await response.text()
-      const data = responseText ? JSON.parse(responseText) : {}
-
+  const responseText = await response.text()
+  const data = responseText ? JSON.parse(responseText) : {}
       if (!response.ok) {
         throw new Error(
           data.detail || "Authentication failed. Please try again."
@@ -175,21 +153,8 @@ export default function App() {
           : form.appointment_time,
     }
 
-    const url = editingId
-      ? `${API_URL}${editingId}`
-      : API_URL
-
-    const method = editingId ? "PUT" : "POST"
-
     try {
-      const response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      })
+      const response = await saveAppointment(editingId, token, payload)
 
       if (!response.ok) {
         const responseText = await response.text()
@@ -232,7 +197,7 @@ export default function App() {
     setError("")
 
     try {
-      const response = await fetch(`${API_URL}${id}`)
+      const response = await getAppointment(id)
 
       if (!response.ok) {
         throw new Error("Appointment not found")
@@ -279,9 +244,7 @@ export default function App() {
     setMessage("")
 
     try {
-      const response = await fetch(`${API_URL}${id}`, {
-        method: "DELETE",
-      })
+      const response = await deleteAppointmentApi(id)
 
       if (!response.ok) {
         throw new Error("Could not delete appointment")
@@ -316,105 +279,27 @@ export default function App() {
 
   // AUTHENTICATION SCREEN
   if (!token) {
-    return (
-      <div className="auth-page">
-        <div className="auth-card">
-          <div className="auth-brand">
-            <div className="brand-icon">A</div>
-            <h1>AppointHUB</h1>
-            <p>YOUR APPOINTMENT MANAGEMENT PLATFORM</p>
-          </div>
-
-          <h2>
-            {authMode === "login"
-              ? "Welcome back"
-              : "Create your account"}
-          </h2>
-
-          <p className="auth-description">
-            {authMode === "login"
-              ? "Sign in to access your workspace."
-              : "Register to get started with AppointHUB."}
-          </p>
-
-          {message && (
-            <div className="success-message">{message}</div>
-          )}
-
-          {error && <div className="error">{error}</div>}
-
-          <form onSubmit={handleAuthSubmit} className="auth-form">
-            {authMode === "register" && (
-              <label>
-                Username
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  required
-                />
-              </label>
-            )}
-
-            <label>
-              Email address
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                required
-              />
-            </label>
-
-            <label>
-              Password
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-                minLength={8}
-              />
-            </label>
-
-            <button
-              type="submit"
-              className="primary-btn"
-              disabled={authLoading}
-            >
-              {authLoading
-                ? "Please wait..."
-                : authMode === "login"
-                  ? "Sign in"
-                  : "Create account"}
-            </button>
-          </form>
-
-          <div className="auth-switch">
-            {authMode === "login"
-              ? "Don't have an account? "
-              : "Already have an account? "}
-
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode(
-                  authMode === "login" ? "register" : "login"
-                )
-                setError("")
-                setMessage("")
-              }}
-            >
-              {authMode === "login" ? "Register" : "Login"}
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  return (
+    <AuthPage
+      authMode={authMode}
+      username={username}
+      email={email}
+      password={password}
+      authLoading={authLoading}
+      message={message}
+      error={error}
+      onSubmit={handleAuthSubmit}
+      onUsernameChange={setUsername}
+      onEmailChange={setEmail}
+      onPasswordChange={setPassword}
+      onToggleMode={() => {
+        setAuthMode(authMode === "login" ? "register" : "login")
+        setError("")
+        setMessage("")
+      }}
+    />
+  )
+}
 
   // DASHBOARD DATA
   const today = new Date().toISOString().slice(0, 10)
@@ -538,372 +423,50 @@ export default function App() {
 
         {/* OVERVIEW PAGE */}
         {page === "overview" && (
-          <>
-            <section className="welcome-section">
-              <div>
-                <span className="eyebrow">
-                  YOUR DAILY SNAPSHOT
-                </span>
-                <h1>Everything in one place.</h1>
-                <p>
-                  Keep track of your schedule and stay on top
-                  of every appointment.
-                </p>
-              </div>
-
-              <button
-                className="primary-btn"
-                onClick={openNewForm}
-              >
-                ＋ New appointment
-              </button>
-            </section>
-
-            <section className="stats-grid">
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Total appointments</span>
-                  <span className="stat-icon purple">▤</span>
-                </div>
-                <h2>{appointments.length}</h2>
-                <small>All recorded appointments</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Pending</span>
-                  <span className="stat-icon orange">◷</span>
-                </div>
-                <h2>{pending}</h2>
-                <small>Waiting for confirmation</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Confirmed</span>
-                  <span className="stat-icon green">✓</span>
-                </div>
-                <h2>{confirmed}</h2>
-                <small>Ready for appointment</small>
-              </div>
-
-              <div className="stat-card">
-                <div className="stat-top">
-                  <span>Completed</span>
-                  <span className="stat-icon blue">▣</span>
-                </div>
-                <h2>{completed}</h2>
-                <small>Successfully completed</small>
-              </div>
-            </section>
-
-            <section className="appointments-section">
-              <div className="section-heading">
-                <div>
-                  <span className="eyebrow">YOUR SCHEDULE</span>
-                  <h2>Recent appointments</h2>
-                  <p>
-                    Your five most recently added appointments.
-                  </p>
-                </div>
-
-                <button
-                  className="secondary-btn"
-                  onClick={() => setPage("appointments")}
-                >
-                  View all →
-                </button>
-              </div>
-
-              {loading ? (
-                <p className="empty-state">
-                  Loading appointments...
-                </p>
-              ) : recentAppointments.length === 0 ? (
-                <div className="empty-state">
-                  <div>▤</div>
-                  <h3>Your schedule is clear</h3>
-                  <p>Create your first appointment to get started.</p>
-                  <button
-                    className="primary-btn"
-                    onClick={openNewForm}
-                  >
-                    ＋ Create appointment
-                  </button>
-                </div>
-              ) : (
-                <AppointmentTable
-                  items={recentAppointments}
-                  onView={viewAppointment}
-                  onEdit={editAppointment}
-                  onDelete={deleteAppointment}
-                />
-              )}
-            </section>
-          </>
-        )}
-
+  <DashboardPage
+    appointments={appointments}
+    pending={pending}
+    confirmed={confirmed}
+    completed={completed}
+    recentAppointments={recentAppointments}
+    loading={loading}
+    onNewAppointment={openNewForm}
+    onView={viewAppointment}
+    onEdit={editAppointment}
+    onDelete={deleteAppointment}
+    onViewAll={() => setPage("appointments")}
+  />
+)}
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (
-          <>
-            <section className="welcome-section">
-              <div>
-                <span className="eyebrow">
-                  SCHEDULE MANAGEMENT
-                </span>
-                <h1>Manage your appointments.</h1>
-                <p>
-                  Create, update, view, and organize your appointments.
-                </p>
-              </div>
-
-              <button
-                className="primary-btn"
-                onClick={openNewForm}
-              >
-                ＋ New appointment
-              </button>
-            </section>
-
-            {showForm && (
-              <section className="form-card">
-                <div className="section-heading">
-                  <div>
-                    <span className="eyebrow">
-                      APPOINTMENT DETAILS
-                    </span>
-                    <h2>
-                      {editingId
-                        ? "Edit appointment"
-                        : "Create new appointment"}
-                    </h2>
-                    <p>Enter the information below.</p>
-                  </div>
-
-                  <button
-                    className="close-btn"
-                    onClick={cancelForm}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <form
-                  onSubmit={handleSubmit}
-                  className="appointment-form"
-                >
-                  <label>
-                    Customer name
-                    <input
-                      name="customer_name"
-                      value={form.customer_name}
-                      onChange={handleChange}
-                      placeholder="Enter customer name"
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Provider name
-                    <input
-                      name="provider_name"
-                      value={form.provider_name}
-                      onChange={handleChange}
-                      placeholder="Enter provider name"
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Appointment date
-                    <input
-                      type="date"
-                      name="appointment_date"
-                      value={form.appointment_date}
-                      onChange={handleChange}
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Appointment time
-                    <input
-                      type="time"
-                      name="appointment_time"
-                      value={form.appointment_time}
-                      onChange={handleChange}
-                      required
-                    />
-                  </label>
-
-                  <label>
-                    Status
-                    <select
-                      name="status"
-                      value={form.status}
-                      onChange={handleChange}
-                    >
-                      <option>Pending</option>
-                      <option>Confirmed</option>
-                      <option>Completed</option>
-                      <option>Cancelled</option>
-                    </select>
-                  </label>
-
-                  <div className="form-actions">
-                    <button
-                      type="button"
-                      className="secondary-btn"
-                      onClick={cancelForm}
-                    >
-                      Cancel
-                    </button>
-
-                    <button
-                      type="submit"
-                      className="primary-btn"
-                    >
-                      {editingId
-                        ? "Save changes"
-                        : "Create appointment"}
-                    </button>
-                  </div>
-                </form>
-              </section>
-            )}
-
-            <section className="appointments-section">
-              <div className="section-heading">
-                <div>
-                  <span className="eyebrow">ALL RECORDS</span>
-                  <h2>All appointments</h2>
-                  <p>
-                    Search and manage your appointment records.
-                  </p>
-                </div>
-
-                <button
-                  className="secondary-btn"
-                  onClick={() => void loadAppointments()}
-                >
-                  ↻ Refresh
-                </button>
-              </div>
-
-              <div className="table-toolbar">
-                <input
-                  className="search-input"
-                  placeholder="Search customer or provider..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-
-                <select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value)}
-                >
-                  <option>All</option>
-                  <option>Pending</option>
-                  <option>Confirmed</option>
-                  <option>Completed</option>
-                  <option>Cancelled</option>
-                </select>
-              </div>
-
-              {loading ? (
-                <p className="empty-state">
-                  Loading appointments...
-                </p>
-              ) : filteredAppointments.length === 0 ? (
-                <div className="empty-state">
-                  <div>▤</div>
-                  <h3>No appointments found</h3>
-                  <p>
-                    Create an appointment or change your search.
-                  </p>
-                </div>
-              ) : (
-                <AppointmentTable
-                  items={filteredAppointments}
-                  onView={viewAppointment}
-                  onEdit={editAppointment}
-                  onDelete={deleteAppointment}
-                />
-              )}
-            </section>
-          </>
-        )}
+  <AppointmentsPage
+    form={form}
+    editingId={editingId}
+    showForm={showForm}
+    loading={loading}
+    search={search}
+    filter={filter}
+    filteredAppointments={filteredAppointments}
+    onNewAppointment={openNewForm}
+    onCancelForm={cancelForm}
+    onSubmit={handleSubmit}
+    onChange={handleChange}
+    onSearchChange={setSearch}
+    onFilterChange={setFilter}
+    onRefresh={() => void loadAppointments()}
+    onView={viewAppointment}
+    onEdit={editAppointment}
+    onDelete={deleteAppointment}
+  />
+)}
 
         {/* HELP PAGE */}
         {page === "help" && (
-          <section className="help-page">
-            <span className="eyebrow">
-              SUPPORT & GUIDANCE
-            </span>
-            <h1>How can we help?</h1>
-            <p className="help-intro">
-              A quick guide to using your AppointHUB workspace.
-            </p>
-
-            <div className="help-grid">
-              <article className="help-item">
-                <span>＋</span>
-                <h3>Create an appointment</h3>
-                <p>
-                  Open Appointments and select “New appointment”.
-                  Fill in the customer, provider, date, time, and
-                  status, then save.
-                </p>
-                <button
-                  className="text-btn"
-                  onClick={openNewForm}
-                >
-                  Create appointment →
-                </button>
-              </article>
-
-              <article className="help-item">
-                <span>▤</span>
-                <h3>View your appointments</h3>
-                <p>
-                  Use the Appointments page to see all records.
-                  Search by customer or provider and filter by status.
-                </p>
-                <button
-                  className="text-btn"
-                  onClick={() => setPage("appointments")}
-                >
-                  Open appointments →
-                </button>
-              </article>
-
-              <article className="help-item">
-                <span>✎</span>
-                <h3>Update or delete</h3>
-                <p>
-                  Use the Edit action to update a record or Delete
-                  to remove an appointment after confirmation.
-                </p>
-                <button
-                  className="text-btn"
-                  onClick={() => setPage("appointments")}
-                >
-                  Manage records →
-                </button>
-              </article>
-
-              <article className="help-item">
-                <span>◉</span>
-                <h3>Understand appointment status</h3>
-                <p>
-                  Pending means awaiting confirmation. Confirmed
-                  means scheduled. Completed means finished.
-                  Cancelled means no longer scheduled.
-                </p>
-              </article>
-            </div>
-          </section>
-        )}
+  <HelpPage
+    onNewAppointment={openNewForm}
+    onOpenAppointments={() => setPage("appointments")}
+  />
+)}
       </main>
 
       {/* APPOINTMENT DETAILS MODAL */}
@@ -954,86 +517,3 @@ export default function App() {
   )
 }
 
-// APPOINTMENT TABLE COMPONENT
-type AppointmentTableProps = {
-  items: Appointment[]
-  onView: (id: number) => void
-  onEdit: (appointment: Appointment) => void
-  onDelete: (id: number) => void
-}
-
-function AppointmentTable({
-  items,
-  onView,
-  onEdit,
-  onDelete,
-}: AppointmentTableProps) {
-  return (
-    <div className="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>Customer</th>
-            <th>Provider</th>
-            <th>Date & time</th>
-            <th>Status</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {items.map((appointment) => (
-            <tr key={appointment.id}>
-              <td>
-                <strong>{appointment.customer_name}</strong>
-                <small>
-                  Appointment #{appointment.id}
-                </small>
-              </td>
-
-              <td>{appointment.provider_name}</td>
-
-              <td>
-                {appointment.appointment_date}
-                <small>{appointment.appointment_time}</small>
-              </td>
-
-              <td>
-                <span
-                  className={`status-badge ${appointment.status.toLowerCase()}`}
-                >
-                  {appointment.status}
-                </span>
-              </td>
-
-              <td>
-                <div className="action-buttons">
-                  <button
-                    className="view-action"
-                    onClick={() => onView(appointment.id)}
-                  >
-                    View
-                  </button>
-
-                  <button
-                    className="edit-action"
-                    onClick={() => onEdit(appointment)}
-                  >
-                    Edit
-                  </button>
-
-                  <button
-                    className="delete-action"
-                    onClick={() => onDelete(appointment.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
