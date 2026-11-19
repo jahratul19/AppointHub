@@ -151,7 +151,6 @@ def register_user(
 ):
     return register_user_service(user_data, db)
 
-    return new_user
 
 # USER LOGIN
 @router.post(

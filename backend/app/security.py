@@ -67,14 +67,15 @@ def create_access_token(
     data: dict,
     expires_delta: timedelta | None = None,
 ) -> str:
-    """Create a JWT access token."""
+    """Create a JWT access token with a maximum lifetime of 15 minutes."""
     to_encode = data.copy()
 
-    expire = datetime.now(timezone.utc) + (
-        expires_delta
-        if expires_delta
-        else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
+    max_expiry = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    if expires_delta is None or expires_delta > max_expiry:
+        expires_delta = max_expiry
+
+    expire = datetime.now(timezone.utc) + expires_delta
 
     to_encode.update({"exp": expire})
 
@@ -83,7 +84,6 @@ def create_access_token(
         SECRET_KEY,
         algorithm=ALGORITHM,
     )
-
 
 def decode_access_token(token: str) -> dict:
     """Decode and validate a JWT access token."""
@@ -97,7 +97,6 @@ def decode_access_token(token: str) -> dict:
         raise ValueError("Invalid or expired access token.") from error
 
 
-
 def create_refresh_token() -> str:
     """Generate a secure random refresh token."""
     return secrets.token_urlsafe(48)
@@ -108,4 +107,3 @@ def hash_refresh_token(token: str) -> str:
     return hashlib.sha256(
         token.encode("utf-8")
     ).hexdigest()
-

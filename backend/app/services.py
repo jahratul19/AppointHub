@@ -4,10 +4,6 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 
 from .models import Appointment, User, AuthSession
-from .security import (
-    hash_refresh_token,
-    create_refresh_token,
-)
 
 from .schemas import (
     AppointmentCreate,
@@ -16,10 +12,36 @@ from .schemas import (
     UserLogin,
 )
 
+from .security import (
+    hash_password,
+    verify_password,
+    create_access_token,
+    hash_refresh_token,
+    create_refresh_token,
+)
+
+
 # SESSION SERVICES
 
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
+
+def create_user_session(user_id: int, db: Session):
+    refresh_token = create_refresh_token()
+    now = datetime.now(timezone.utc)
+
+    new_session = AuthSession(
+        user_id=user_id,
+        refresh_token_hash=hash_refresh_token(refresh_token),
+        created_at=now,
+        expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    return refresh_token, new_session
 
 
 def refresh_user_session(refresh_token: str, db: Session):
@@ -82,12 +104,14 @@ def logout_user_session(refresh_token: str, db: Session):
         session.revoked_at = datetime.now(timezone.utc)
         db.commit()
 
+
 def get_user_sessions(user_id: int, db: Session):
     return db.query(AuthSession).filter(
         AuthSession.user_id == user_id
     ).order_by(
         AuthSession.created_at.desc()
     ).all()
+
 
 def revoke_user_session(
     session_id: int,
@@ -110,6 +134,7 @@ def revoke_user_session(
         db.commit()
 
     return {"message": "Session revoked successfully"}
+
 
 # APPOINTMENT SERVICES
 
@@ -205,7 +230,6 @@ def register_user_service(
     return new_user
 
 
-
 def login_user_service(
     user_data: UserLogin,
     db: Session,
@@ -224,6 +248,12 @@ def login_user_service(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been banned",
+        )
+
     access_token = create_access_token(
         data={"sub": str(user.id), "role": user.role}
     )
@@ -238,4 +268,3 @@ def login_user_service(
         "token_type": "bearer",
         "refresh_token": refresh_token,
     }
-
