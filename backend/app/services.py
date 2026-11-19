@@ -1,20 +1,43 @@
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime, timedelta, timezone
 
-from .models import Appointment, User
+from .models import Appointment, User, AuthSession
+from .security import (
+    hash_refresh_token,
+    create_refresh_token,
+)
+
 from .schemas import (
     AppointmentCreate,
     AppointmentUpdate,
     UserCreate,
     UserLogin,
 )
-from .security import (
-    hash_password,
-    verify_password,
-    create_access_token,
-)
 
+# SESSION SERVICES
+
+REFRESH_TOKEN_EXPIRE_DAYS = 7
+
+
+def create_user_session(user_id: int, db: Session):
+    refresh_token = create_refresh_token()
+
+    now = datetime.now(timezone.utc)
+
+    new_session = AuthSession(
+        user_id=user_id,
+        refresh_token_hash=hash_refresh_token(refresh_token),
+        created_at=now,
+        expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    return refresh_token, new_session
 
 # APPOINTMENT SERVICES
 
@@ -110,6 +133,7 @@ def register_user_service(
     return new_user
 
 
+
 def login_user_service(
     user_data: UserLogin,
     db: Session,
@@ -129,10 +153,17 @@ def login_user_service(
         )
 
     access_token = create_access_token(
-        data={"sub": str(user.id)}
+        data={"sub": str(user.id), "role": user.role}
+    )
+
+    refresh_token, new_session = create_user_session(
+        user_id=user.id,
+        db=db,
     )
 
     return {
         "access_token": access_token,
         "token_type": "bearer",
+        "refresh_token": refresh_token,
     }
+

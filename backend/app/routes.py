@@ -8,7 +8,7 @@ from .services import (
     register_user_service,
     login_user_service,
 )
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -142,7 +142,6 @@ def register_user(
 
     return new_user
 
-
 # USER LOGIN
 @router.post(
     "/auth/login",
@@ -151,6 +150,21 @@ def register_user(
 )
 def login_user(
     user_data: UserLogin,
+    response: Response,
     db: Session = Depends(get_db),
 ):
-    return login_user_service(user_data, db)
+    result = login_user_service(user_data, db)
+
+    refresh_token = result.pop("refresh_token")
+
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=7 * 24 * 60 * 60,
+        path="/api/auth",
+    )
+
+    return result
