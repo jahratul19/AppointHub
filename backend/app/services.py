@@ -21,23 +21,95 @@ from .schemas import (
 REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 
-def create_user_session(user_id: int, db: Session):
-    refresh_token = create_refresh_token()
+
+def refresh_user_session(refresh_token: str, db: Session):
+    token_hash = hash_refresh_token(refresh_token)
+
+    old_session = db.query(AuthSession).filter(
+        AuthSession.refresh_token_hash == token_hash
+    ).first()
+
+    if not old_session or old_session.revoked_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
 
     now = datetime.now(timezone.utc)
 
-    new_session = AuthSession(
-        user_id=user_id,
-        refresh_token_hash=hash_refresh_token(refresh_token),
-        created_at=now,
-        expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
+    if old_session.expires_at <= now:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token expired",
+        )
+
+    user = db.query(User).filter(
+        User.id == old_session.user_id
+    ).first()
+
+    if not user or user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is unavailable",
+        )
+
+    old_session.revoked_at = now
+
+    access_token = create_access_token(
+        data={"sub": str(user.id), "role": user.role}
     )
 
-    db.add(new_session)
-    db.commit()
-    db.refresh(new_session)
+    new_refresh_token, new_session = create_user_session(
+        user_id=user.id,
+        db=db,
+    )
 
-    return refresh_token, new_session
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "refresh_token": new_refresh_token,
+    }
+
+
+def logout_user_session(refresh_token: str, db: Session):
+    token_hash = hash_refresh_token(refresh_token)
+
+    session = db.query(AuthSession).filter(
+        AuthSession.refresh_token_hash == token_hash
+    ).first()
+
+    if session and session.revoked_at is None:
+        session.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+
+def get_user_sessions(user_id: int, db: Session):
+    return db.query(AuthSession).filter(
+        AuthSession.user_id == user_id
+    ).order_by(
+        AuthSession.created_at.desc()
+    ).all()
+
+def revoke_user_session(
+    session_id: int,
+    user_id: int,
+    db: Session,
+):
+    session = db.query(AuthSession).filter(
+        AuthSession.id == session_id,
+        AuthSession.user_id == user_id,
+    ).first()
+
+    if not session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    if session.revoked_at is None:
+        session.revoked_at = datetime.now(timezone.utc)
+        db.commit()
+
+    return {"message": "Session revoked successfully"}
 
 # APPOINTMENT SERVICES
 

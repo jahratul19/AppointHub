@@ -1,14 +1,11 @@
-
-from .services import (
-    create_appointment_service,
-    get_appointments_service,
-    get_appointment_service,
-    update_appointment_service,
-    delete_appointment_service,
-    register_user_service,
-    login_user_service,
+from fastapi import (
+    APIRouter,
+    Cookie,
+    Depends,
+    HTTPException,
+    Response,
+    status,
 )
-from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -22,10 +19,23 @@ from .schemas import (
     UserLogin,
     UserResponse,
     TokenResponse,
+    AuthSessionResponse,
 )
-from .security import (
-    decode_access_token,
+from .security import decode_access_token
+from .services import (
+    create_appointment_service,
+    get_appointments_service,
+    get_appointment_service,
+    update_appointment_service,
+    delete_appointment_service,
+    register_user_service,
+    login_user_service,
+    refresh_user_session,
+    logout_user_session,
+    get_user_sessions,
+    revoke_user_session,
 )
+
 
 router = APIRouter(prefix="/api", tags=["AppointHUB"])
 
@@ -33,6 +43,7 @@ bearer_scheme = HTTPBearer()
 
 
 # JWT VERIFICATION
+
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
@@ -59,7 +70,7 @@ def get_current_user(
 
     user = db.query(User).filter(User.id == user_id).first()
 
-    if user is None:
+    if user is None or user.is_banned:
         raise credentials_exception
 
     return user
@@ -168,3 +179,85 @@ def login_user(
     )
 
     return result
+
+    # REFRESH ACCESS TOKEN
+@router.post(
+    "/auth/refresh",
+    response_model=TokenResponse,
+    tags=["Authentication"],
+)
+def refresh_access_token(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+        )
+
+    result = refresh_user_session(refresh_token, db)
+
+    new_refresh_token = result.pop("refresh_token")
+
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        max_age=7 * 24 * 60 * 60,
+        path="/api/auth",
+    )
+
+    return result
+# USER LOGOUT
+@router.post(
+    "/auth/logout",
+    tags=["Authentication"],
+)
+def logout_user(
+    response: Response,
+    refresh_token: str | None = Cookie(default=None),
+    db: Session = Depends(get_db),
+):
+    if refresh_token:
+        logout_user_session(refresh_token, db)
+
+    response.delete_cookie(
+        key="refresh_token",
+        path="/api/auth",
+    )
+
+    return {"message": "Logged out successfully"}
+
+
+# VIEW MY SESSIONS
+@router.get(
+    "/auth/sessions",
+    response_model=list[AuthSessionResponse],
+    tags=["Authentication"],
+)
+def view_my_sessions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_user_sessions(current_user.id, db)
+
+
+# REVOKE MY SESSION
+@router.delete(
+    "/auth/sessions/{session_id}",
+    tags=["Authentication"],
+)
+def revoke_my_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return revoke_user_session(
+        session_id,
+        current_user.id,
+        db,
+    )

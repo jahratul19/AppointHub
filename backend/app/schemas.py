@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date, time, datetime
 from pydantic import BaseModel, ConfigDict,EmailStr
 
 
@@ -46,3 +46,11 @@ class UserResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+class AuthSessionResponse(BaseModel):
+    id: int
+    created_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
