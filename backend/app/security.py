@@ -5,7 +5,9 @@ import hashlib
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
+
 import jwt
+import secrets
 from dotenv import load_dotenv
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
@@ -93,3 +95,17 @@ def decode_access_token(token: str) -> dict:
         )
     except InvalidTokenError as error:
         raise ValueError("Invalid or expired access token.") from error
+
+
+
+def create_refresh_token() -> str:
+    """Generate a secure random refresh token."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash a refresh token before database storage."""
+    return hashlib.sha256(
+        token.encode("utf-8")
+    ).hexdigest()
+

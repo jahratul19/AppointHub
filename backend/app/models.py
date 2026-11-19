@@ -1,6 +1,9 @@
-from sqlalchemy import Column, Date, Integer, String, Time
+from sqlalchemy import (
+    Boolean, Column, Date, DateTime, ForeignKey,
+    Integer, String, Time
+)
 from .database import Base
-from sqlalchemy import Boolean, Column, Date, Integer, String, Time
+
 
 
 class Appointment(Base):
@@ -28,3 +31,34 @@ class User(Base):
 
     # Admin can ban or unban a user
     is_banned = Column(Boolean, nullable=False, default=False, server_default="false")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+    )
+
+    refresh_token_hash = Column(String(255), nullable=False, unique=True)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    expires_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    revoked_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
