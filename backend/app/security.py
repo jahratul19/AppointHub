@@ -1,32 +1,63 @@
 
 import os
+import hmac
+import hashlib
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 import jwt
+from dotenv import load_dotenv
 from jwt.exceptions import InvalidTokenError
 from pwdlib import PasswordHash
+
+# Load environment variables from backend/.env
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
 password_hash = PasswordHash.recommended()
 
 SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+PASSWORD_PEPPER = os.getenv("PASSWORD_PEPPER")
 
 if not SECRET_KEY:
     raise RuntimeError("JWT_SECRET_KEY environment variable is not set.")
 
+if not PASSWORD_PEPPER:
+    raise RuntimeError("PASSWORD_PEPPER environment variable is not set.")
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Access token expires after 15 minutes
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+
+
+def _prepare_password(password: str) -> str:
+    """Combine password with the secret pepper."""
+    return hmac.new(
+        PASSWORD_PEPPER.encode("utf-8"),
+        password.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def hash_password(password: str) -> str:
-    """Hash a plain-text password."""
-    return password_hash.hash(password)
+    """Hash a password using Argon2 and pepper."""
+    prepared_password = _prepare_password(password)
+    return password_hash.hash(prepared_password)
 
 
 def verify_password(
     plain_password: str,
     hashed_password: str,
 ) -> bool:
-    """Verify a password against its hash."""
+    """Verify a password against its Argon2 hash."""
+    prepared_password = _prepare_password(plain_password)
+
+    # Check passwords created with the new pepper system
+    if password_hash.verify(prepared_password, hashed_password):
+        return True
+
+    # Temporary compatibility for older passwords without pepper
     return password_hash.verify(plain_password, hashed_password)
 
 
