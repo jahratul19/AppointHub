@@ -5,8 +5,13 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, ""
 const API_URL = `${API_BASE_URL}/api/appointments/`
 const AUTH_URL = `${API_BASE_URL}/api/auth`
 
-export function getAppointments() {
-  return fetch(API_URL)
+
+export function getAppointments(token: string) {
+  return fetch(API_URL, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
 }
 
 export function authenticate(
@@ -20,6 +25,7 @@ export function authenticate(
 
   return fetch(endpoint, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -45,12 +51,61 @@ export function saveAppointment(
   })
 }
 
-export function getAppointment(id: number) {
-  return fetch(`${API_URL}${id}`)
+export function getAppointment(id: number, token: string) {
+  return fetch(`${API_URL}${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
 }
 
-export function deleteAppointment(id: number): Promise<Response> {
+export function deleteAppointment(id: number, token: string): Promise<Response> {
   return fetch(`${API_URL}${id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function refreshAccessToken() {
+  return fetch(`${AUTH_URL}/refresh`, {
+    method: "POST",
+    credentials: "include",
+  })
+}
+
+export function logout() {
+  return fetch(`${AUTH_URL}/logout`, {
+    method: "POST",
+    credentials: "include",
+  })
+}
+
+export function updateProfile(
+  token: string,
+  payload: { username: string; email: string }
+) {
+  return fetch(`${AUTH_URL}/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function changePassword(
+  token: string,
+  payload: { current_password: string; new_password: string }
+) {
+  return fetch(`${AUTH_URL}/change-password`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   })
 }
