@@ -344,6 +344,15 @@ def change_password_service(
         password_data.new_password
     )
 
+    # Revoke all active sessions
+    active_sessions = db.query(AuthSession).filter(
+        AuthSession.user_id == current_user.id,
+        AuthSession.revoked_at.is_(None),
+    ).all()
+
+    for session in active_sessions:
+        session.revoked_at = datetime.now(timezone.utc)
+
     db.commit()
 
     return {"message": "Password changed successfully"}
