@@ -11,7 +11,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import User
+from .models import User, Appointment 
 from .schemas import (
     AppointmentCreate,
     AppointmentUpdate,
@@ -84,23 +84,41 @@ def get_current_user(
 
     return user
 
-
-# CREATE APPOINTMENT - PROTECTED
-
-@router.post(
-    "/appointments/",
-    response_model=AppointmentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_appointment(
-    appointment: AppointmentCreate,
-    db: Session = Depends(get_db),
+def get_current_admin(
     current_user: User = Depends(get_current_user),
 ):
-    return create_appointment_service(
-        appointment, db, current_user
-    )
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
 
+    return current_user
+
+
+@router.get("/admin/dashboard/stats")
+def get_admin_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    total_users = db.query(User).count()
+
+    banned_users = db.query(User).filter(
+        User.is_banned.is_(True)
+    ).count()
+
+    total_appointments = db.query(Appointment).count()
+
+    pending_appointments = db.query(Appointment).filter(
+        Appointment.status == "Pending"
+    ).count()
+
+    return {
+        "total_users": total_users,
+        "banned_users": banned_users,
+        "total_appointments": total_appointments,
+        "pending_appointments": pending_appointments,
+    }
 
 # READ ALL APPOINTMENTS
 @router.get(
