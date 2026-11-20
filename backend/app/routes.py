@@ -21,6 +21,8 @@ from .schemas import (
     UserResponse,
     TokenResponse,
     AuthSessionResponse,
+    UserUpdate,
+    PasswordChange,
 )
 from .security import decode_access_token
 from .services import (
@@ -35,6 +37,8 @@ from .services import (
     logout_user_session,
     get_user_sessions,
     revoke_user_session,
+    update_user_profile_service,
+    change_password_service,
 )
 
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
@@ -193,6 +197,41 @@ def login_user(
     )
 
     return result
+
+
+# UPDATE PROFILE
+@router.put(
+    "/auth/profile",
+    response_model=UserResponse,
+    tags=["Authentication"],
+)
+def update_user_profile(
+    user_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return update_user_profile_service(
+        current_user,
+        user_data,
+        db,
+    )
+
+
+# CHANGE PASSWORD
+@router.put(
+    "/auth/change-password",
+    tags=["Authentication"],
+)
+def change_password(
+    password_data: PasswordChange,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return change_password_service(
+        current_user,
+        password_data,
+        db,
+    )
 
     # REFRESH ACCESS TOKEN
 @router.post(

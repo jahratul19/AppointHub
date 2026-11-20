@@ -2,6 +2,7 @@ from datetime import date, time, datetime
 from pydantic import BaseModel, ConfigDict,EmailStr
 
 
+
 class AppointmentCreate(BaseModel):
     customer_name: str
     provider_name: str
@@ -33,6 +34,16 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+
+
+class UserUpdate(BaseModel):
+    username: str
+    email: EmailStr
+
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class UserResponse(BaseModel):

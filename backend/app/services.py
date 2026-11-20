@@ -10,6 +10,8 @@ from .schemas import (
     AppointmentUpdate,
     UserCreate,
     UserLogin,
+    UserUpdate,
+    PasswordChange,
 )
 
 from .security import (
@@ -297,3 +299,51 @@ def login_user_service(
         "token_type": "bearer",
         "refresh_token": refresh_token,
     }
+
+def update_user_profile_service(
+    current_user: User,
+    user_data: UserUpdate,
+    db: Session,
+):
+    existing_user = db.query(User).filter(
+        User.id != current_user.id,
+        (User.username == user_data.username)
+        | (User.email == user_data.email),
+    ).first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Username or email already in use",
+        )
+
+    current_user.username = user_data.username
+    current_user.email = user_data.email
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
+
+
+def change_password_service(
+    current_user: User,
+    password_data: PasswordChange,
+    db: Session,
+):
+    if not verify_password(
+        password_data.current_password,
+        current_user.hashed_password,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.hashed_password = hash_password(
+        password_data.new_password
+    )
+
+    db.commit()
+
+    return {"message": "Password changed successfully"}
