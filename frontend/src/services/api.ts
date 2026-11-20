@@ -81,3 +81,31 @@ export function logout() {
     credentials: "include",
   })
 }
+
+export function updateProfile(
+  token: string,
+  payload: { username: string; email: string }
+) {
+  return fetch(`${AUTH_URL}/profile`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+}
+
+export function changePassword(
+  token: string,
+  payload: { current_password: string; new_password: string }
+) {
+  return fetch(`${AUTH_URL}/change-password`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  })
+}

@@ -6,6 +6,8 @@ import {
   deleteAppointment as deleteAppointmentApi,
   refreshAccessToken,
   logout as logoutApi,
+  updateProfile,
+  changePassword,
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
@@ -15,6 +17,7 @@ import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
+import { Eye, EyeOff } from "lucide-react"
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -68,6 +71,16 @@ export default function App() {
       setLoading(false)
     }
   }
+
+  // PROFILE AND PASSWORD STATE
+
+  const [profileUsername, setProfileUsername] = useState("")
+  const [profileEmail, setProfileEmail] = useState("")
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
+  const [showNewPassword, setShowNewPassword] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [showAccount, setShowAccount] = useState(false)
 
 // RESTORE LOGIN SESSION AFTER PAGE RELOAD
 useEffect(() => {
@@ -137,6 +150,58 @@ try {
     }
   }
 
+    async function handleProfileUpdate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError("")
+    setMessage("")
+
+    if (!token) return
+
+    try {
+      const response = await updateProfile(token, {
+        username: profileUsername,
+        email: profileEmail,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Profile update failed")
+      }
+
+      setMessage("Profile updated successfully!")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    }
+  }
+
+    async function handlePasswordChange(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError("")
+    setMessage("")
+
+    if (!token) return
+
+    try {
+      const response = await changePassword(token, {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.detail || "Password change failed")
+      }
+
+      setMessage("Password changed successfully!")
+      setCurrentPassword("")
+      setNewPassword("")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong")
+    }
+  }
+  
   function handleLogout() {
     setToken(null)
     setAppointments([])
@@ -427,18 +492,33 @@ try {
             </h2>
           </div>
 
+
+          
           <div className="topbar-right">
             <span className="today-label">
               ◷ &nbsp;{today}
             </span>
             <div className="top-avatar">A</div>
-            <button
-              className="logout-btn"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
-          </div>
+
+  <button
+    className="logout-btn"
+    onClick={() => {
+      setShowAccount(!showAccount)
+      setError("")
+      setMessage("")
+    }}
+  >
+    Account Settings
+  </button>
+
+  <button
+    className="logout-btn"
+    onClick={handleLogout}
+  >
+    Logout
+  </button>
+</div>
+
         </header>
 
         {message && (
@@ -447,8 +527,75 @@ try {
 
         {error && <div className="error">{error}</div>}
 
+        {/* ACCOUNT SETTINGS */}
+{showAccount && (
+  <div className="account-settings">
+    <h2>Account Settings</h2>
+
+    <h3>Update Profile</h3>
+    <form className="account-form" onSubmit={handleProfileUpdate}>
+      <input
+        type="text"
+        placeholder="New username"
+        value={profileUsername}
+        onChange={(e) => setProfileUsername(e.target.value)}
+        required
+      />
+
+      <input
+        type="email"
+        placeholder="New email"
+        value={profileEmail}
+        onChange={(e) => setProfileEmail(e.target.value)}
+        required
+      />
+
+      <button type="submit">Update Profile</button>
+    </form>
+
+    <h3>Change Password</h3>
+<form className="account-form" onSubmit={handlePasswordChange}>
+  <div className="password-field">
+    <input
+      type={showCurrentPassword ? "text" : "password"}
+      placeholder="Current password"
+      value={currentPassword}
+      onChange={(e) => setCurrentPassword(e.target.value)}
+      required
+    />
+    <button
+  type="button"
+  className="toggle-password"
+  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+>
+  {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+</button>
+  </div>
+
+  <div className="password-field">
+    <input
+      type={showNewPassword ? "text" : "password"}
+      placeholder="New password"
+      value={newPassword}
+      onChange={(e) => setNewPassword(e.target.value)}
+      required
+    />
+    <button
+  type="button"
+  className="toggle-password"
+  onClick={() => setShowNewPassword(!showNewPassword)}
+>
+  {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+</button>
+  </div>
+
+  <button type="submit">Change Password</button>
+</form>
+  </div>
+)}
+
         {/* OVERVIEW PAGE */}
-        {page === "overview" && (
+        {page === "overview" && !showAccount && (
   <DashboardPage
     appointments={appointments}
     pending={pending}
