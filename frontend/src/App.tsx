@@ -53,8 +53,9 @@ export default function App() {
     setError("")
 
     try {
-      const response = await getAppointments()
+      if (!token) return
 
+      const response = await getAppointments(token)
       if (!response.ok) {
         throw new Error("Could not load appointments")
       }
@@ -218,7 +219,9 @@ try {
     setError("")
 
     try {
-      const response = await getAppointment(id)
+      if (!token) return
+
+      const response = await getAppointment(id, token)
 
       if (!response.ok) {
         throw new Error("Appointment not found")
@@ -265,7 +268,9 @@ try {
     setMessage("")
 
     try {
-      const response = await deleteAppointmentApi(id)
+      if (!token) return
+
+      const response = await deleteAppointmentApi(id, token)
 
       if (!response.ok) {
         throw new Error("Could not delete appointment")

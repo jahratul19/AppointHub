@@ -5,8 +5,13 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, ""
 const API_URL = `${API_BASE_URL}/api/appointments/`
 const AUTH_URL = `${API_BASE_URL}/api/auth`
 
-export function getAppointments() {
-  return fetch(API_URL)
+
+export function getAppointments(token: string) {
+  return fetch(API_URL, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
 }
 
 export function authenticate(
@@ -46,13 +51,20 @@ export function saveAppointment(
   })
 }
 
-export function getAppointment(id: number) {
-  return fetch(`${API_URL}${id}`)
+export function getAppointment(id: number, token: string) {
+  return fetch(`${API_URL}${id}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
 }
 
-export function deleteAppointment(id: number): Promise<Response> {
+export function deleteAppointment(id: number, token: string): Promise<Response> {
   return fetch(`${API_URL}${id}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   })
 }
 

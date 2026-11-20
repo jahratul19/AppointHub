@@ -82,6 +82,7 @@ def get_current_user(
 
 
 # CREATE APPOINTMENT - PROTECTED
+
 @router.post(
     "/appointments/",
     response_model=AppointmentResponse,
@@ -92,7 +93,9 @@ def create_appointment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-        return create_appointment_service(appointment, db)
+    return create_appointment_service(
+        appointment, db, current_user
+    )
 
 
 # READ ALL APPOINTMENTS
@@ -100,8 +103,11 @@ def create_appointment(
     "/appointments/",
     response_model=list[AppointmentResponse],
 )
-def get_appointments(db: Session = Depends(get_db)):
-        return get_appointments_service(db)
+def get_appointments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return get_appointments_service(db, current_user)
 
 
 # READ SINGLE APPOINTMENT
@@ -112,10 +118,12 @@ def get_appointments(db: Session = Depends(get_db)):
 def get_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
+    return get_appointment_service(
+        appointment_id, db, current_user
+    )
 
-    return get_appointment_service(appointment_id, db)
-    return appointment
 
 # UPDATE APPOINTMENT
 @router.put(
@@ -126,10 +134,11 @@ def update_appointment(
     appointment_id: int,
     updated_data: AppointmentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return update_appointment_service(appointment_id, updated_data, db)
-
-    return appointment
+    return update_appointment_service(
+        appointment_id, updated_data, db, current_user
+    )
 
 
 # DELETE APPOINTMENT
@@ -137,10 +146,11 @@ def update_appointment(
 def delete_appointment(
     appointment_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return delete_appointment_service(appointment_id, db)
-
-    return {"message": "Appointment deleted successfully"}
+    return delete_appointment_service(
+        appointment_id, db, current_user
+    )
 
 
 # USER REGISTRATION

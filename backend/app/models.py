@@ -15,6 +15,7 @@ class Appointment(Base):
     appointment_date = Column(Date, nullable=False)
     appointment_time = Column(Time, nullable=False)
     status = Column(String(30), default="Pending", nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 
 

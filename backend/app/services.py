@@ -138,11 +138,16 @@ def revoke_user_session(
 
 # APPOINTMENT SERVICES
 
+
 def create_appointment_service(
     appointment: AppointmentCreate,
     db: Session,
+    current_user: User,
 ):
-    db_appointment = Appointment(**appointment.model_dump())
+    db_appointment = Appointment(
+        **appointment.model_dump(),
+        user_id=current_user.id,
+    )
 
     db.add(db_appointment)
     db.commit()
@@ -151,17 +156,35 @@ def create_appointment_service(
     return db_appointment
 
 
-def get_appointments_service(db: Session):
-    return db.query(Appointment).all()
+def get_appointments_service(
+    db: Session,
+    current_user: User,
+):
+    query = db.query(Appointment)
+
+    if current_user.role != "admin":
+        query = query.filter(
+            Appointment.user_id == current_user.id
+        )
+
+    return query.all()
 
 
 def get_appointment_service(
     appointment_id: int,
     db: Session,
+    current_user: User,
 ):
-    appointment = db.query(Appointment).filter(
+    query = db.query(Appointment).filter(
         Appointment.id == appointment_id
-    ).first()
+    )
+
+    if current_user.role != "admin":
+        query = query.filter(
+            Appointment.user_id == current_user.id
+        )
+
+    appointment = query.first()
 
     if appointment is None:
         raise HTTPException(
@@ -176,8 +199,11 @@ def update_appointment_service(
     appointment_id: int,
     updated_data: AppointmentUpdate,
     db: Session,
+    current_user: User,
 ):
-    appointment = get_appointment_service(appointment_id, db)
+    appointment = get_appointment_service(
+        appointment_id, db, current_user
+    )
 
     for key, value in updated_data.model_dump().items():
         setattr(appointment, key, value)
@@ -191,8 +217,11 @@ def update_appointment_service(
 def delete_appointment_service(
     appointment_id: int,
     db: Session,
+    current_user: User,
 ):
-    appointment = get_appointment_service(appointment_id, db)
+    appointment = get_appointment_service(
+        appointment_id, db, current_user
+    )
 
     db.delete(appointment)
     db.commit()
