@@ -4,7 +4,10 @@ import {
   saveAppointment,
   getAppointment,
   deleteAppointment as deleteAppointmentApi,
+  refreshAccessToken,
+  logout as logoutApi,
 } from "./services/api"
+
 import HelpPage from "./pages/HelpPage"
 import AppointmentsPage from "./pages/AppointmentsPage"
 import DashboardPage from "./pages/DashboardPage"
@@ -64,6 +67,24 @@ export default function App() {
       setLoading(false)
     }
   }
+
+// RESTORE LOGIN SESSION AFTER PAGE RELOAD
+useEffect(() => {
+  async function restoreSession() {
+    try {
+      const response = await refreshAccessToken()
+
+      if (response.ok) {
+        const data = await response.json()
+        setToken(data.access_token)
+      }
+    } catch {
+      // User stays logged out if session restoration fails.
+    }
+  }
+
+  void restoreSession()
+}, [])
 
   // LOAD APPOINTMENTS AFTER LOGIN
   useEffect(() => {

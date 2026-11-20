@@ -20,6 +20,7 @@ export function authenticate(
 
   return fetch(endpoint, {
     method: "POST",
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
     },
@@ -52,5 +53,19 @@ export function getAppointment(id: number) {
 export function deleteAppointment(id: number): Promise<Response> {
   return fetch(`${API_URL}${id}`, {
     method: "DELETE",
+  })
+}
+
+export function refreshAccessToken() {
+  return fetch(`${AUTH_URL}/refresh`, {
+    method: "POST",
+    credentials: "include",
+  })
+}
+
+export function logout() {
+  return fetch(`${AUTH_URL}/logout`, {
+    method: "POST",
+    credentials: "include",
   })
 }

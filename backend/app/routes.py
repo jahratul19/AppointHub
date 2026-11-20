@@ -1,3 +1,4 @@
+import os
 from fastapi import (
     APIRouter,
     Cookie,
@@ -35,6 +36,10 @@ from .services import (
     get_user_sessions,
     revoke_user_session,
 )
+
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+COOKIE_SAMESITE = "none" if COOKIE_SECURE else "lax"
 
 
 router = APIRouter(prefix="/api", tags=["AppointHUB"])
@@ -171,8 +176,8 @@ def login_user(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=7 * 24 * 60 * 60,
         path="/api/auth",
     )
@@ -204,8 +209,8 @@ def refresh_access_token(
         key="refresh_token",
         value=new_refresh_token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
         max_age=7 * 24 * 60 * 60,
         path="/api/auth",
     )
@@ -227,6 +232,9 @@ def logout_user(
     response.delete_cookie(
         key="refresh_token",
         path="/api/auth",
+        secure=COOKIE_SECURE,
+        httponly=True,
+        samesite=COOKIE_SAMESITE,
     )
 
     return {"message": "Logged out successfully"}
