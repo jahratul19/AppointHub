@@ -9,6 +9,7 @@ import {
   updateProfile,
   changePassword,
   getAdminDashboardStats,
+  getAdminUsers,
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
@@ -57,6 +58,14 @@ type AdminDashboardStats = {
   total_appointments: number
   pending_appointments: number
 }
+
+type AdminUser = {
+  id: number
+  username: string
+  email: string
+  role: string
+  is_banned: boolean
+}
 export default function App() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
@@ -83,6 +92,8 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [userRole, setUserRole] = useState<string>("user")
   const [adminStats, setAdminStats] =
   useState<AdminDashboardStats | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
   const [authMode, setAuthMode] = useState<AuthMode>("login")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
@@ -168,6 +179,34 @@ useEffect(() => {
   }
 
   void loadAdminStats()
+}, [token, userRole])
+
+useEffect(() => {
+  if (!token || userRole !== "admin") {
+    setAdminUsers([])
+    return
+  }
+
+  async function loadAdminUsers() {
+    setUsersLoading(true)
+
+    try {
+      const response = await getAdminUsers(token!)
+
+      if (!response.ok) {
+        throw new Error("Failed to load admin users")
+      }
+
+      const data: AdminUser[] = await response.json()
+      setAdminUsers(data)
+    } catch (error) {
+      console.error("Admin users error:", error)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
+  void loadAdminUsers()
 }, [token, userRole])
 
   // AUTHENTICATION
@@ -739,6 +778,48 @@ try {
     onEdit={editAppointment}
     onDelete={deleteAppointment}
   />
+)}
+
+{/* ADMIN USERS PAGE */}
+{page === "admin-users" && (
+  <div className="admin-users-page">
+    <h2>Manage Users</h2>
+    <p>View and manage registered users.</p>
+
+    {usersLoading ? (
+      <p>Loading users...</p>
+    ) : adminUsers.length === 0 ? (
+      <p>No users found.</p>
+    ) : (
+      <div className="admin-users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Username</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {adminUsers.map((user) => (
+              <tr key={user.id}>
+                <td>{user.id}</td>
+                <td>{user.username}</td>
+                <td>{user.email}</td>
+                <td>{user.role}</td>
+                <td>
+                  {user.is_banned ? "Banned" : "Active"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
 )}
 
         {/* HELP PAGE */}
