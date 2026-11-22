@@ -120,6 +120,24 @@ def get_admin_dashboard_stats(
         "pending_appointments": pending_appointments,
     }
 
+@router.get("/admin/users")
+def get_admin_users(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    users = db.query(User).order_by(User.id.desc()).all()
+
+    return [
+        {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "role": user.role,
+            "is_banned": user.is_banned,
+        }
+        for user in users
+    ]
+
 # READ ALL APPOINTMENTS
 @router.get(
     "/appointments/",

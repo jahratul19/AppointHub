@@ -109,3 +109,19 @@ export function changePassword(
     body: JSON.stringify(payload),
   })
 }
+
+export function getAdminDashboardStats(token: string) {
+  return fetch(`${API_BASE_URL}/api/admin/dashboard/stats`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function getAdminUsers(token: string) {
+  return fetch(`${API_BASE_URL}/api/admin/users`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}

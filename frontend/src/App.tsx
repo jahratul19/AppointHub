@@ -8,6 +8,7 @@ import {
   logout as logoutApi,
   updateProfile,
   changePassword,
+  getAdminDashboardStats,
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
@@ -28,6 +29,34 @@ const emptyForm: AppointmentForm = {
 
 }
 
+function getRoleFromToken(token: string): string {
+  try {
+    const payload = token.split(".")[1]
+    const normalized = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+
+    const padded = normalized.padEnd(
+      normalized.length + (4 - normalized.length % 4) % 4,
+      "="
+    )
+
+    const decoded = JSON.parse(atob(padded))
+
+    return typeof decoded.role === "string"
+      ? decoded.role
+      : "user"
+  } catch {
+    return "user"
+  }
+}
+
+type AdminDashboardStats = {
+  total_users: number
+  banned_users: number
+  total_appointments: number
+  pending_appointments: number
+}
 export default function App() {
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
@@ -42,9 +71,18 @@ export default function App() {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("All")
   const [page, setPage] = useState<Page>("overview")
+  const [adminUserFilter, setAdminUserFilter] = useState<
+  "all" | "banned"
+>("all")
+
+const [adminAppointmentFilter, setAdminAppointmentFilter] =
+  useState<"all" | "pending">("all")
 
   // AUTHENTICATION STATE
   const [token, setToken] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string>("user")
+  const [adminStats, setAdminStats] =
+  useState<AdminDashboardStats | null>(null)
   const [authMode, setAuthMode] = useState<AuthMode>("login")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
@@ -91,6 +129,7 @@ useEffect(() => {
       if (response.ok) {
         const data = await response.json()
         setToken(data.access_token)
+        setUserRole(getRoleFromToken(data.access_token))
       }
     } catch {
       // User stays logged out if session restoration fails.
@@ -106,6 +145,30 @@ useEffect(() => {
       void loadAppointments()
     }
   }, [token])
+
+  useEffect(() => {
+  if (!token || userRole !== "admin") {
+    setAdminStats(null)
+    return
+  }
+
+  async function loadAdminStats() {
+    try {
+      const response = await getAdminDashboardStats(token!)
+
+      if (!response.ok) {
+        throw new Error("Failed to load admin statistics")
+      }
+
+      const data: AdminDashboardStats = await response.json()
+      setAdminStats(data)
+    } catch (error) {
+      console.error("Admin statistics error:", error)
+    }
+  }
+
+  void loadAdminStats()
+}, [token, userRole])
 
   // AUTHENTICATION
   async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
@@ -138,6 +201,7 @@ try {
         setPassword("")
       } else {
         setToken(data.access_token)
+        setUserRole(getRoleFromToken(data.access_token))
         setPassword("")
         setMessage("Login successful!")
       }
@@ -204,6 +268,7 @@ try {
   
   function handleLogout() {
     setToken(null)
+    setUserRole("user")
     setAppointments([])
     setSelected(null)
     setShowForm(false)
@@ -467,6 +532,16 @@ try {
             </span>
           </button>
 
+        <button
+  className={`nav-item ${
+    page === "admin-users" ? "active" : ""
+  }`}
+  onClick={() => setPage("admin-users")}
+>
+  <span className="nav-icon">♙</span> Users
+</button>  
+
+
           <div className="profile">
             <div className="avatar">A</div>
             <div>
@@ -596,19 +671,52 @@ try {
 
         {/* OVERVIEW PAGE */}
         {page === "overview" && !showAccount && (
-  <DashboardPage
-    appointments={appointments}
-    pending={pending}
-    confirmed={confirmed}
-    completed={completed}
-    recentAppointments={recentAppointments}
-    loading={loading}
-    onNewAppointment={openNewForm}
-    onView={viewAppointment}
-    onEdit={editAppointment}
-    onDelete={deleteAppointment}
-    onViewAll={() => setPage("appointments")}
-  />
+  userRole === "admin" ? (
+    <div className="admin-dashboard">
+      <h2>Admin Dashboard</h2>
+      <p>System overview and statistics</p>
+
+      {adminStats ? (
+        <div className="admin-stats-grid">
+          <div className="admin-stat-card">
+            <h3>Total Users</h3>
+            <p>{adminStats.total_users}</p>
+          </div>
+
+          <div className="admin-stat-card">
+            <h3>Banned Users</h3>
+            <p>{adminStats.banned_users}</p>
+          </div>
+
+          <div className="admin-stat-card">
+            <h3>Total Appointments</h3>
+            <p>{adminStats.total_appointments}</p>
+          </div>
+
+          <div className="admin-stat-card">
+            <h3>Pending Appointments</h3>
+            <p>{adminStats.pending_appointments}</p>
+          </div>
+        </div>
+      ) : (
+        <p>Loading admin statistics...</p>
+      )}
+    </div>
+  ) : (
+    <DashboardPage
+      appointments={appointments}
+      pending={pending}
+      confirmed={confirmed}
+      completed={completed}
+      recentAppointments={recentAppointments}
+      loading={loading}
+      onNewAppointment={openNewForm}
+      onView={viewAppointment}
+      onEdit={editAppointment}
+      onDelete={deleteAppointment}
+      onViewAll={() => setPage("appointments")}
+    />
+  )
 )}
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (

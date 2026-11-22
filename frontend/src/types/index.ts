@@ -15,5 +15,5 @@ export type AppointmentForm = {
   status: string
 }
 
-export type Page = "overview" | "appointments" | "help"
+export type Page = "overview" | "appointments" | "help" | "admin-users"
 export type AuthMode = "login" | "register"
