@@ -94,6 +94,8 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   useState<AdminDashboardStats | null>(null)
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
   const [authMode, setAuthMode] = useState<AuthMode>("login")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
@@ -526,7 +528,19 @@ try {
     .sort((a, b) => b.id - a.id)
     .slice(0, 5)
 
-  return (
+  const filteredAdminUsers = adminUsers.filter((user) => {
+  const matchesSearch =
+    user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+  const matchesStatus =
+    statusFilter === "all" ||
+    (statusFilter === "active" && !user.is_banned) ||
+    (statusFilter === "banned" && user.is_banned)
+
+  return matchesSearch && matchesStatus
+})
+    return (
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
@@ -785,11 +799,28 @@ try {
 {page === "admin-users" && (
   <div className="admin-users-page">
     <h2>Manage Users</h2>
+    <div className="users-controls">
+  <input
+    type="text"
+    placeholder="Search by username or email..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+  >
+    <option value="all">All Users</option>
+    <option value="active">Active Users</option>
+    <option value="banned">Banned Users</option>
+  </select>
+</div>
     <p>View and manage registered users.</p>
 
     {usersLoading ? (
       <p>Loading users...</p>
-    ) : adminUsers.length === 0 ? (
+    ) : filteredAdminUsers.length === 0 ? (
       <p>No users found.</p>
     ) : (
       <div className="admin-users-table">
@@ -805,7 +836,7 @@ try {
           </thead>
 
           <tbody>
-            {adminUsers.map((user) => (
+            {filteredAdminUsers.map((user) => (
               <tr key={user.id}>
                 <td>{user.id}</td>
                 <td>{user.username}</td>
