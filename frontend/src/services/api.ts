@@ -125,3 +125,33 @@ export function getAdminUsers(token: string) {
     },
   })
 }
+
+export function banAdminUser(
+  token: string,
+  userId: number,
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/ban`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export function unbanAdminUser(
+  token: string,
+  userId: number,
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/unban`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  })
+}

@@ -1025,3 +1025,113 @@ td small { display: block; color: #9aabad; margin-top: 6px; font-size: 9px; }
     width: 100%;
   }
 }
+
+/* Admin User Action Modal */
+.action-modal {
+  background: #ffffff;
+  border: 1px solid #e5ebee;
+  border-radius: 14px;
+  padding: 28px;
+  margin-top: 24px;
+  max-width: 520px;
+  box-shadow: 0 8px 28px rgba(20, 45, 55, 0.08);
+}
+
+.action-modal h3 {
+  font-size: 20px;
+  font-weight: 650;
+  color: #173640;
+  margin: 0 0 8px;
+}
+
+.action-modal p {
+  color: #718096;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.action-modal textarea {
+  display: block;
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  padding: 13px 14px;
+  border: 1px solid #dce5e8;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #263b42;
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.action-modal textarea:focus {
+  border-color: #248b83;
+  box-shadow: 0 0 0 3px rgba(36, 139, 131, 0.10);
+}
+
+.action-modal button {
+  padding: 10px 20px;
+  border: 1px solid #dce5e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #344b53;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.action-modal button:first-of-type {
+  background: #173f46;
+  border-color: #173f46;
+  color: #ffffff;
+}
+
+.action-modal button:first-of-type:hover:not(:disabled) {
+  background: #245b62;
+  border-color: #245b62;
+}
+
+.action-modal button:last-of-type:hover {
+  background: #f3f6f7;
+}
+
+.action-modal button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ban-user-btn {
+  background: #fff1f1;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 7px 15px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ban-user-btn:hover {
+  background: #fee2e2;
+}
+
+.unban-user-btn {
+  background: #eaf7f3;
+  color: #16836b;
+  border: 1px solid #b8e5d7;
+  padding: 7px 15px;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.unban-user-btn:hover {
+  background: #d5f0e7;
+}

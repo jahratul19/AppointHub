@@ -10,6 +10,9 @@ import {
   changePassword,
   getAdminDashboardStats,
   getAdminUsers,
+  banAdminUser,
+  unbanAdminUser,
+
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
@@ -94,6 +97,10 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   useState<AdminDashboardStats | null>(null)
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
+  const [actionUser, setActionUser] = useState<AdminUser | null>(null)
+  const [actionReason, setActionReason] = useState("")
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionMessage, setActionMessage] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [authMode, setAuthMode] = useState<AuthMode>("login")
@@ -101,6 +108,46 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
+
+
+  async function handleUserAction() {
+  if (!actionUser || !actionReason.trim() || !token) {
+    setActionMessage("Please enter a reason.")
+    return
+  }
+
+  setActionLoading(true)
+  setActionMessage("")
+
+  try {
+    const response = actionUser.is_banned
+      ? await unbanAdminUser(token, actionUser.id, actionReason)
+      : await banAdminUser(token, actionUser.id, actionReason)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || "Action failed")
+    }
+
+    setAdminUsers((previousUsers) =>
+      previousUsers.map((user) =>
+        user.id === actionUser.id
+          ? { ...user, is_banned: !user.is_banned }
+          : user
+      )
+    )
+
+    setActionMessage("User status updated successfully.")
+    setActionUser(null)
+    setActionReason("")
+  } catch (error) {
+    setActionMessage(
+      error instanceof Error ? error.message : "Something went wrong."
+    )
+  } finally {
+    setActionLoading(false)
+  }
+}
 
   async function loadAppointments() {
     setLoading(true)
@@ -832,6 +879,7 @@ try {
               <th>Email</th>
               <th>Role</th>
               <th>Status</th>
+              <th>Actions</th>
             </tr>
           </thead>
 
@@ -845,10 +893,62 @@ try {
                 <td>
                   {user.is_banned ? "Banned" : "Active"}
                 </td>
+
+                <td>
+  {user.role !== "admin" && (
+    <button
+  className={user.is_banned ? "unban-user-btn" : "ban-user-btn"}
+  onClick={() => {
+    setActionUser(user)
+    setActionReason("")
+    setActionMessage("")
+  }}
+>
+  {user.is_banned ? "Unban" : "Ban"}
+</button>
+  )}
+</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {actionUser && (
+  <div className="action-modal">
+    <h3>
+      {actionUser.is_banned ? "Unban User" : "Ban User"}
+    </h3>
+
+    <p>
+      Enter a reason for this action.
+    </p>
+
+    <textarea
+      value={actionReason}
+      onChange={(e) => setActionReason(e.target.value)}
+      placeholder="Write reason here..."
+    />
+
+    {actionMessage && <p>{actionMessage}</p>}
+
+    <button
+      onClick={handleUserAction}
+      disabled={actionLoading || !actionReason.trim()}
+    >
+      {actionLoading ? "Processing..." : "Confirm"}
+    </button>
+
+    <button
+      onClick={() => {
+        setActionUser(null)
+        setActionReason("")
+        setActionMessage("")
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+)}
       </div>
     )}
   </div>
