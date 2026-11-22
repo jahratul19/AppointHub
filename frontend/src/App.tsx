@@ -556,6 +556,14 @@ try {
           >
             <span className="nav-icon">▤</span> Appointments
           </button>
+                    <button
+            className={`nav-item ${
+              page === "admin-users" ? "active" : ""
+            }`}
+            onClick={() => setPage("admin-users")}
+          >
+            <span className="nav-icon">♙</span> Users
+          </button>
         </nav>
 
         <div className="sidebar-bottom">
@@ -571,14 +579,7 @@ try {
             </span>
           </button>
 
-        <button
-  className={`nav-item ${
-    page === "admin-users" ? "active" : ""
-  }`}
-  onClick={() => setPage("admin-users")}
->
-  <span className="nav-icon">♙</span> Users
-</button>  
+        
 
 
           <div className="profile">
