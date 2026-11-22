@@ -65,3 +65,6 @@ class AuthSessionResponse(BaseModel):
     revoked_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)
+
+class AdminUserAction(BaseModel):
+    reason: str

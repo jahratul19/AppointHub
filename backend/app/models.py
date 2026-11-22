@@ -1,6 +1,6 @@
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey,
-    Integer, String, Time
+    Integer, String, Time, func
 )
 from .database import Base
 
@@ -32,6 +32,33 @@ class User(Base):
 
     # Admin can ban or unban a user
     is_banned = Column(Boolean, nullable=False, default=False, server_default="false")
+
+class AdminModerationLog(Base):
+    __tablename__ = "admin_moderation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    admin_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    target_user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False
+    )
+
+    action = Column(String(20), nullable=False)
+
+    reason = Column(String(500), nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now()
+    )
 
 
 class AuthSession(Base):

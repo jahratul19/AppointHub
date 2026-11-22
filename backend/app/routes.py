@@ -9,9 +9,10 @@ from fastapi import (
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from .database import get_db
-from .models import User, Appointment 
+from .models import User, Appointment, AdminModerationLog, AuthSession
 from .schemas import (
     AppointmentCreate,
     AppointmentUpdate,
@@ -23,6 +24,7 @@ from .schemas import (
     AuthSessionResponse,
     UserUpdate,
     PasswordChange,
+    AdminUserAction,
 )
 from .security import decode_access_token
 from .services import (
@@ -137,6 +139,95 @@ def get_admin_users(
         }
         for user in users
     ]
+
+
+@router.put("/admin/users/{user_id}/ban")
+def ban_admin_user(
+    user_id: int,
+    action_data: AdminUserAction,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if not action_data.reason.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Ban reason is required",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    if user.role == "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="Admin accounts cannot be banned here",
+        )
+
+    user.is_banned = True
+
+    db.add(
+        AdminModerationLog(
+            admin_user_id=current_admin.id,
+            target_user_id=user.id,
+            action="ban",
+            reason=action_data.reason.strip(),
+        )
+    )
+
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id,
+        AuthSession.revoked_at.is_(None),
+    ).update(
+        {AuthSession.revoked_at: func.now()},
+        synchronize_session=False,
+    )
+
+    db.commit()
+
+    return {"message": "User banned successfully"}
+
+
+@router.put("/admin/users/{user_id}/unban")
+def unban_admin_user(
+    user_id: int,
+    action_data: AdminUserAction,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if not action_data.reason.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Unban reason is required",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    user.is_banned = False
+
+    db.add(
+        AdminModerationLog(
+            admin_user_id=current_admin.id,
+            target_user_id=user.id,
+            action="unban",
+            reason=action_data.reason.strip(),
+        )
+    )
+
+    db.commit()
+
+    return {"message": "User unbanned successfully"}
+
 
 # READ ALL APPOINTMENTS
 @router.get(
