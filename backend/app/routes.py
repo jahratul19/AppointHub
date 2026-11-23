@@ -123,74 +123,46 @@ def get_admin_dashboard_stats(
         "pending_appointments": pending_appointments,
     }
 
+
 @router.get("/admin/users")
 def get_admin_users(
+    page: int = 1,
+    limit: int = 10,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin),
 ):
-    users = db.query(User).order_by(User.id.desc()).all()
-
-    return [
-        {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "role": user.role,
-            "is_banned": user.is_banned,
-        }
-        for user in users
-    ]
-
-
-@router.put("/admin/users/{user_id}/ban")
-def ban_admin_user(
-    user_id: int,
-    action_data: AdminUserAction,
-    db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin),
-):
-    if not action_data.reason.strip():
+    if page < 1 or limit < 1 or limit > 100:
         raise HTTPException(
             status_code=400,
-            detail="Ban reason is required",
+            detail="Invalid page or limit",
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
+    total_users = db.query(User).count()
 
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found",
-        )
-
-    if user.role == "admin":
-        raise HTTPException(
-            status_code=400,
-            detail="Admin accounts cannot be banned here",
-        )
-
-    user.is_banned = True
-
-    db.add(
-        AdminModerationLog(
-            admin_user_id=current_admin.id,
-            target_user_id=user.id,
-            action="ban",
-            reason=action_data.reason.strip(),
-        )
+    users = (
+        db.query(User)
+        .order_by(User.id.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
     )
 
-    db.query(AuthSession).filter(
-        AuthSession.user_id == user.id,
-        AuthSession.revoked_at.is_(None),
-    ).update(
-        {AuthSession.revoked_at: func.now()},
-        synchronize_session=False,
-    )
-
-    db.commit()
-
-    return {"message": "User banned successfully"}
+    return {
+        "users": [
+            {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "is_banned": user.is_banned,
+            }
+            for user in users
+        ],
+        "total": total_users,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_users + limit - 1) // limit,
+    }
 
 
 @router.put("/admin/users/{user_id}/unban")
@@ -270,6 +242,23 @@ def update_admin_user_role(
     db.commit()
 
     return {"message": "User role updated successfully"}
+
+    # CREATE APPOINTMENT
+@router.post(
+    "/appointments/",
+    response_model=AppointmentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_appointment(
+    appointment_data: AppointmentCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return create_appointment_service(
+        appointment_data,
+        db,
+        current_user,
+    )
 # READ ALL APPOINTMENTS
 @router.get(
     "/appointments/",
