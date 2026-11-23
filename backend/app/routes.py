@@ -123,6 +123,43 @@ def get_admin_dashboard_stats(
         "total_appointments": total_appointments,
         "pending_appointments": pending_appointments,
     }
+    # ADMIN AUDIT LOGS
+@router.get("/admin/audit-logs")
+def get_admin_audit_logs(
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    logs = (
+        db.query(AdminModerationLog)
+        .order_by(AdminModerationLog.created_at.desc())
+        .limit(100)
+        .all()
+    )
+
+    result = []
+
+    for log in logs:
+        admin = db.query(User).filter(
+            User.id == log.admin_user_id
+        ).first()
+
+        target = db.query(User).filter(
+            User.id == log.target_user_id
+        ).first()
+
+        result.append({
+            "id": log.id,
+            "admin_username": admin.username if admin else "Unknown",
+            "target_username": target.username if target else "Unknown",
+            "action": log.action,
+            "reason": log.reason,
+            "created_at": (
+                log.created_at.isoformat()
+                if log.created_at else None
+            ),
+        })
+
+    return result
 
 
 @router.get("/admin/users")

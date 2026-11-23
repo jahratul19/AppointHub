@@ -14,6 +14,7 @@ import {
   unbanAdminUser,
   updateAdminUserRole,
   revokeAdminUserSessions,
+  getAdminAuditLogs,
 
 } from "./services/api"
 
@@ -72,6 +73,15 @@ type AdminUser = {
   is_banned: boolean
 }
 
+type AdminAuditLog = {
+  id: number
+  admin_username: string
+  target_username: string
+  action: string
+  reason: string
+  created_at: string | null
+}
+
 type AdminUsersResponse = {
   users: AdminUser[]
   total: number
@@ -84,6 +94,7 @@ export default function App() {
   const [usersPage, setUsersPage] = useState(1)
   const [usersTotalPages, setUsersTotalPages] = useState(1)
   const [usersTotal, setUsersTotal] = useState(0)
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -349,6 +360,29 @@ useEffect(() => {
 
   void loadAdminUsers()
 }, [token, userRole, usersPage])
+
+async function loadAuditLogs() {
+  if (!token || userRole !== "admin") return
+
+  try {
+    const response = await getAdminAuditLogs(token)
+
+    if (!response.ok) {
+      throw new Error("Failed to load audit logs")
+    }
+
+    const data = await response.json()
+    setAuditLogs(data)
+  } catch (error) {
+    console.error("Audit logs loading error:", error)
+  }
+}
+
+useEffect(() => {
+  if (page === "admin-audit-logs") {
+    void loadAuditLogs()
+  }
+}, [page, token, userRole])
 
   // AUTHENTICATION
   async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
@@ -722,6 +756,14 @@ return matchesSearch && matchesStatus && matchesRole
           >
             <span className="nav-icon">♙</span> Users
           </button>
+          <button
+  className={`nav-item ${
+    page === "admin-audit-logs" ? "active" : ""
+  }`}
+  onClick={() => setPage("admin-audit-logs")}
+>
+  <span className="nav-icon">▤</span> Audit Logs
+</button>
         </nav>
 
         <div className="sidebar-bottom">
@@ -1241,6 +1283,50 @@ return matchesSearch && matchesStatus && matchesRole
     </button>
   </div>
 )}
+  </div>
+)}
+
+{/* ADMIN AUDIT LOGS PAGE */}
+{page === "admin-audit-logs" && (
+  <div className="admin-users-page">
+    <h2>Admin Audit Logs</h2>
+    <p>Review recent administrative actions.</p>
+
+    {auditLogs.length === 0 ? (
+      <p>No audit logs found.</p>
+    ) : (
+      <div className="admin-users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Admin</th>
+              <th>Target User</th>
+              <th>Action</th>
+              <th>Reason</th>
+              <th>Date & Time</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {auditLogs.map((log) => (
+              <tr key={log.id}>
+                <td>{log.id}</td>
+                <td>{log.admin_username}</td>
+                <td>{log.target_username}</td>
+                <td>{log.action}</td>
+                <td>{log.reason}</td>
+                <td>
+                  {log.created_at
+                    ? new Date(log.created_at).toLocaleString()
+                    : "N/A"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
   </div>
 )}
 

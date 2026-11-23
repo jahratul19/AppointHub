@@ -189,3 +189,11 @@ export function revokeAdminUserSessions(
     }
   )
 }
+
+export function getAdminAuditLogs(token: string) {
+  return fetch(`${API_BASE_URL}/api/admin/audit-logs`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}

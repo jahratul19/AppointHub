@@ -1487,3 +1487,12 @@ td small { display: block; color: #9aabad; margin-top: 6px; font-size: 9px; }
 .admin-users-table td:last-child button {
   margin: 4px 7px 4px 0;
 }
+
+/* Space between navigation and help section */
+.sidebar nav {
+  margin-bottom: 20px;
+}
+
+.sidebar-bottom {
+  margin-top: 20px;
+}
