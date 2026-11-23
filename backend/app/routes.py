@@ -25,6 +25,7 @@ from .schemas import (
     UserUpdate,
     PasswordChange,
     AdminUserAction,
+    AdminRoleUpdate,
 )
 from .security import decode_access_token
 from .services import (
@@ -228,7 +229,47 @@ def unban_admin_user(
 
     return {"message": "User unbanned successfully"}
 
+@router.put("/admin/users/{user_id}/role")
+def update_admin_user_role(
+    user_id: int,
+    role_data: AdminRoleUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if role_data.role not in ["admin", "user"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid role",
+        )
 
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    if user.id == current_admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot change your own role",
+        )
+
+    user.role = role_data.role
+
+    db.add(
+        AdminModerationLog(
+            admin_user_id=current_admin.id,
+            target_user_id=user.id,
+            action="role_change",
+            reason=f"Role changed to {role_data.role}",
+        )
+    )
+
+    db.commit()
+
+    return {"message": "User role updated successfully"}
 # READ ALL APPOINTMENTS
 @router.get(
     "/appointments/",

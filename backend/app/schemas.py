@@ -68,3 +68,6 @@ class AuthSessionResponse(BaseModel):
 
 class AdminUserAction(BaseModel):
     reason: str
+
+class AdminRoleUpdate(BaseModel):
+    role: str

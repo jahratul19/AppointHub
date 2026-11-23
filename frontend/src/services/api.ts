@@ -155,3 +155,18 @@ export function unbanAdminUser(
     body: JSON.stringify({ reason }),
   })
 }
+
+export function updateAdminUserRole(
+  token: string,
+  userId: number,
+  role: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ role }),
+  })
+}

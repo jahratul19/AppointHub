@@ -1135,3 +1135,28 @@ td small { display: block; color: #9aabad; margin-top: 6px; font-size: 9px; }
 .unban-user-btn:hover {
   background: #d5f0e7;
 }
+
+.role-change-btn {
+  background: #dbeafe;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.role-change-btn:hover {
+  background: #bfdbfe;
+}
+
+.admin-role {
+  display: inline-block;
+  background-color: #dbeafe;
+  color: #2563eb;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}

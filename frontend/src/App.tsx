@@ -12,6 +12,7 @@ import {
   getAdminUsers,
   banAdminUser,
   unbanAdminUser,
+  updateAdminUserRole,
 
 } from "./services/api"
 
@@ -108,9 +109,46 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
+  const [roleActionUser, setRoleActionUser] = useState<AdminUser | null>(null)
+  const [roleActionLoading, setRoleActionLoading] = useState(false)
+
+async function handleRoleChange() {
+  if (!roleActionUser || !token) return
+
+  const newRole = roleActionUser.role === "admin" ? "user" : "admin"
+
+  setRoleActionLoading(true)
+
+  try {
+    const response = await updateAdminUserRole(
+      token,
+      roleActionUser.id,
+      newRole
+    )
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || "Role update failed")
+    }
+
+    setAdminUsers((previousUsers) =>
+      previousUsers.map((user) =>
+        user.id === roleActionUser.id
+          ? { ...user, role: newRole }
+          : user
+      )
+    )
+
+    setRoleActionUser(null)
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "Something went wrong.")
+  } finally {
+    setRoleActionLoading(false)
+  }
+}
 
 
-  async function handleUserAction() {
+async function handleUserAction() {
   if (!actionUser || !actionReason.trim() || !token) {
     setActionMessage("Please enter a reason.")
     return
@@ -889,7 +927,11 @@ try {
                 <td>{user.id}</td>
                 <td>{user.username}</td>
                 <td>{user.email}</td>
-                <td>{user.role}</td>
+                <td>
+  <span className={user.role === "admin" ? "admin-role" : ""}>
+    {user.role}
+  </span>
+</td>
                 <td>
                   {user.is_banned ? "Banned" : "Active"}
                 </td>
@@ -907,6 +949,13 @@ try {
   {user.is_banned ? "Unban" : "Ban"}
 </button>
   )}
+
+  <button
+  className="role-change-btn"
+  onClick={() => setRoleActionUser(user)}
+>
+  {user.role === "admin" ? "Make User" : "Make Admin"}
+</button>
 </td>
               </tr>
             ))}
@@ -951,6 +1000,35 @@ try {
 )}
       </div>
     )}
+
+    {roleActionUser && (
+  <div className="action-modal">
+    <h3>
+      {roleActionUser.role === "admin"
+        ? "Change Admin to User?"
+        : "Make User an Admin?"}
+    </h3>
+
+    <p>
+      Are you sure you want to change the role of{" "}
+      {roleActionUser.username}?
+    </p>
+
+    <button
+      onClick={handleRoleChange}
+      disabled={roleActionLoading}
+    >
+      {roleActionLoading ? "Processing..." : "Confirm"}
+    </button>
+
+    <button
+      onClick={() => setRoleActionUser(null)}
+      disabled={roleActionLoading}
+    >
+      Cancel
+    </button>
+  </div>
+)}
   </div>
 )}
 
