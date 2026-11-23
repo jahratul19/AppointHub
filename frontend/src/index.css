@@ -1466,3 +1466,24 @@ td small { display: block; color: #9aabad; margin-top: 6px; font-size: 9px; }
     align-items: flex-start;
   }
 }
+
+/* Pastel Light Green Admin Buttons */
+.role-change-btn {
+  background-color: #e8f5e9 !important;
+  color: #456b4a !important;
+  border: 1px solid #c5e1c7 !important;
+  border-radius: 8px;
+  padding: 9px 13px;
+  margin: 4px 7px 4px 0;
+  transition: 0.2s ease;
+}
+
+.role-change-btn:hover {
+  background-color: #d5ecd7 !important;
+  border-color: #a8d2ad !important;
+}
+
+/* Add space between all action buttons */
+.admin-users-table td:last-child button {
+  margin: 4px 7px 4px 0;
+}

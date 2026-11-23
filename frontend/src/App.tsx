@@ -112,11 +112,14 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
   const [actionUser, setActionUser] = useState<AdminUser | null>(null)
+  const [selectedAdminUser, setSelectedAdminUser] =
+  useState<AdminUser | null>(null)
   const [actionReason, setActionReason] = useState("")
   const [actionLoading, setActionLoading] = useState(false)
   const [actionMessage, setActionMessage] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [roleFilter, setRoleFilter] = useState("all")
   const [authMode, setAuthMode] = useState<AuthMode>("login")
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
@@ -672,11 +675,14 @@ try {
     user.email.toLowerCase().includes(searchTerm.toLowerCase())
 
   const matchesStatus =
-    statusFilter === "all" ||
-    (statusFilter === "active" && !user.is_banned) ||
-    (statusFilter === "banned" && user.is_banned)
+  statusFilter === "all" ||
+  (statusFilter === "active" && !user.is_banned) ||
+  (statusFilter === "banned" && user.is_banned)
 
-  return matchesSearch && matchesStatus
+const matchesRole =
+  roleFilter === "all" || user.role === roleFilter
+
+return matchesSearch && matchesStatus && matchesRole
 })
     return (
     <div className="app-layout">
@@ -1023,6 +1029,14 @@ try {
     <option value="active">Active Users</option>
     <option value="banned">Banned Users</option>
   </select>
+  <select
+  value={roleFilter}
+  onChange={(e) => setRoleFilter(e.target.value)}
+>
+  <option value="all">All Roles</option>
+  <option value="admin">Admins</option>
+  <option value="user">Users</option>
+</select>
 </div>
     <p>View and manage registered users.</p>
 
@@ -1060,6 +1074,13 @@ try {
                 </td>
 
                 <td>
+
+                  <button
+  className="role-change-btn"
+  onClick={() => setSelectedAdminUser(user)}
+>
+  Details
+</button>
   {user.role !== "admin" && (
     <button
   className={user.is_banned ? "unban-user-btn" : "ban-user-btn"}
@@ -1158,6 +1179,39 @@ try {
 )}
       </div>
     )}
+
+    {selectedAdminUser && (
+  <div className="action-modal">
+    <h3>User Details</h3>
+
+    <p>
+      <strong>User ID:</strong> {selectedAdminUser.id}
+    </p>
+
+    <p>
+      <strong>Username:</strong> {selectedAdminUser.username}
+    </p>
+
+    <p>
+      <strong>Email:</strong> {selectedAdminUser.email}
+    </p>
+
+    <p>
+      <strong>Role:</strong> {selectedAdminUser.role}
+    </p>
+
+    <p>
+      <strong>Account Status:</strong>{" "}
+      {selectedAdminUser.is_banned ? "Banned" : "Active"}
+    </p>
+
+    <button
+      onClick={() => setSelectedAdminUser(null)}
+    >
+      Close
+    </button>
+  </div>
+)}
 
     {roleActionUser && (
   <div className="action-modal">
