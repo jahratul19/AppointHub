@@ -71,3 +71,8 @@ class AdminUserAction(BaseModel):
 
 class AdminRoleUpdate(BaseModel):
     role: str
+
+class AdminBulkUserAction(BaseModel):
+    user_ids: list[int]
+    reason: str
+    action: str

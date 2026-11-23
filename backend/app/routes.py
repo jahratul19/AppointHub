@@ -26,6 +26,7 @@ from .schemas import (
     PasswordChange,
     AdminUserAction,
     AdminRoleUpdate,
+    AdminBulkUserAction,
 )
 from .security import decode_access_token
 from .services import (
@@ -281,6 +282,83 @@ def update_admin_user_role(
 
     return {"message": "User role updated successfully"}
 
+# ADMIN BULK USER ACTIONS
+@router.post("/admin/users/bulk-action")
+def bulk_admin_user_action(
+    action_data: AdminBulkUserAction,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if action_data.action not in ["ban", "unban"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid action",
+        )
+
+    if not action_data.reason.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Reason is required",
+        )
+
+    if not action_data.user_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="No users selected",
+        )
+
+    users = (
+        db.query(User)
+        .filter(User.id.in_(action_data.user_ids))
+        .all()
+    )
+
+    if len(users) != len(set(action_data.user_ids)):
+        raise HTTPException(
+            status_code=404,
+            detail="One or more users not found",
+        )
+
+    processed_count = 0
+
+    for user in users:
+        if user.id == current_admin.id:
+            continue
+
+        if action_data.action == "ban":
+            if user.role == "admin":
+                continue
+
+            user.is_banned = True
+
+            db.query(AuthSession).filter(
+    AuthSession.user_id == user.id,
+    AuthSession.revoked_at.is_(None),
+).update(
+    {"revoked_at": datetime.now(timezone.utc)},
+    synchronize_session=False,
+)
+
+        else:
+            user.is_banned = False
+
+        db.add(
+            AdminModerationLog(
+                admin_user_id=current_admin.id,
+                target_user_id=user.id,
+                action=action_data.action,
+                reason=action_data.reason.strip(),
+            )
+        )
+
+        processed_count += 1
+
+    db.commit()
+
+    return {
+        "message": "Bulk action completed",
+        "processed_count": processed_count,
+    }
     # ADMIN REVOKE USER SESSIONS
 @router.delete("/admin/users/{user_id}/sessions")
 def revoke_admin_user_sessions(

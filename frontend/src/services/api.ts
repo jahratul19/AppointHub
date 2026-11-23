@@ -197,3 +197,23 @@ export function getAdminAuditLogs(token: string) {
     },
   })
 }
+
+export function bulkAdminUserAction(
+  token: string,
+  userIds: number[],
+  action: "ban" | "unban",
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/bulk-action`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      user_ids: userIds,
+      action,
+      reason,
+    }),
+  })
+}

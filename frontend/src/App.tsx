@@ -15,6 +15,7 @@ import {
   updateAdminUserRole,
   revokeAdminUserSessions,
   getAdminAuditLogs,
+  bulkAdminUserAction,
 
 } from "./services/api"
 
@@ -139,6 +140,9 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [roleActionUser, setRoleActionUser] = useState<AdminUser | null>(null)
   const [roleActionLoading, setRoleActionLoading] = useState(false)
   const [sessionActionLoading, setSessionActionLoading] = useState<number | null>(null)
+  const [selectedBulkUserIds, setSelectedBulkUserIds] = useState<number[]>([])
+  const [bulkReason, setBulkReason] = useState("")
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
 
 async function handleRoleChange() {
   if (!roleActionUser || !token) return
@@ -245,6 +249,46 @@ async function handleUserAction() {
     )
   } finally {
     setActionLoading(false)
+  }
+}
+async function handleBulkUserAction(action: "ban" | "unban") {
+  if (!token || selectedBulkUserIds.length === 0 || !bulkReason.trim()) {
+    return
+  }
+
+  setBulkActionLoading(true)
+  setError("")
+  setMessage("")
+
+  try {
+    const response = await bulkAdminUserAction(
+      token,
+      selectedBulkUserIds,
+      action,
+      bulkReason
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Bulk action failed")
+    }
+
+    const usersResponse = await getAdminUsers(token, usersPage, 10)
+
+    if (!usersResponse.ok) {
+      throw new Error("Action completed, but users could not be reloaded.")
+    }
+
+    const usersData: AdminUsersResponse = await usersResponse.json()
+    setAdminUsers(usersData.users)
+    setSelectedBulkUserIds([])
+    setBulkReason("")
+    setMessage("Bulk action completed successfully.")
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Something went wrong")
+  } finally {
+    setBulkActionLoading(false)
   }
 }
 
@@ -1082,6 +1126,35 @@ return matchesSearch && matchesStatus && matchesRole
 </div>
     <p>View and manage registered users.</p>
 
+    <div className="bulk-actions">
+  <p>Selected users: {selectedBulkUserIds.length}</p>
+
+  <textarea
+    value={bulkReason}
+    onChange={(e) => setBulkReason(e.target.value)}
+    placeholder="Enter reason for bulk action..."
+  />
+
+  <div className="bulk-action-buttons">
+    
+    <button
+  className="ban-user-btn"
+  onClick={() => handleBulkUserAction("ban")}
+      disabled={bulkActionLoading || selectedBulkUserIds.length === 0 || !bulkReason.trim()}
+    >
+      Bulk Ban
+    </button>
+
+    <button
+  className="unban-user-btn"
+  onClick={() => handleBulkUserAction("unban")}
+      disabled={bulkActionLoading || selectedBulkUserIds.length === 0 || !bulkReason.trim()}
+    >
+      Bulk Unban
+    </button>
+  </div>
+</div>
+
     {usersLoading ? (
       <p>Loading users...</p>
     ) : filteredAdminUsers.length === 0 ? (
@@ -1090,19 +1163,36 @@ return matchesSearch && matchesStatus && matchesRole
       <div className="admin-users-table">
         <table>
           <thead>
-            <tr>
-              <th>ID</th>
-              <th>Username</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+  <tr>
+    <th>Select</th>
+    <th>ID</th>
+    <th>Username</th>
+    <th>Email</th>
+    <th>Role</th>
+    <th>Status</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+          
 
           <tbody>
             {filteredAdminUsers.map((user) => (
               <tr key={user.id}>
+                <td>
+  {user.role !== "admin" && (
+    <input
+      type="checkbox"
+      checked={selectedBulkUserIds.includes(user.id)}
+      onChange={(e) => {
+        setSelectedBulkUserIds((previous) =>
+          e.target.checked
+            ? [...previous, user.id]
+            : previous.filter((id) => id !== user.id)
+        )
+      }}
+    />
+  )}
+</td>
                 <td>{user.id}</td>
                 <td>{user.username}</td>
                 <td>{user.email}</td>
