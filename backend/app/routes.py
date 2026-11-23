@@ -43,6 +43,7 @@ from .services import (
     update_user_profile_service,
     change_password_service,
 )
+from datetime import datetime, timezone
 
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 
@@ -242,6 +243,47 @@ def update_admin_user_role(
     db.commit()
 
     return {"message": "User role updated successfully"}
+
+    # ADMIN REVOKE USER SESSIONS
+@router.delete("/admin/users/{user_id}/sessions")
+def revoke_admin_user_sessions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    active_sessions = db.query(AuthSession).filter(
+        AuthSession.user_id == user_id,
+        AuthSession.revoked_at.is_(None),
+    ).all()
+
+    now = datetime.now(timezone.utc)
+
+    for session in active_sessions:
+        session.revoked_at = now
+
+    db.add(
+        AdminModerationLog(
+            admin_user_id=current_admin.id,
+            target_user_id=user.id,
+            action="session_revoke",
+            reason="Admin revoked all active sessions",
+        )
+    )
+
+    db.commit()
+
+    return {
+        "message": "User sessions revoked successfully",
+        "revoked_sessions": len(active_sessions),
+    }
 
     # CREATE APPOINTMENT
 @router.post(

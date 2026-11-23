@@ -118,13 +118,17 @@ export function getAdminDashboardStats(token: string) {
   })
 }
 
-export function getAdminUsers(token: string) {
-  return fetch(`${API_BASE_URL}/api/admin/users`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  })
+export function getAdminUsers(token: string, page: number = 1, limit: number = 10) {
+  return fetch(
+    `${API_BASE_URL}/api/admin/users?page=${page}&limit=${limit}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
 }
+
 
 export function banAdminUser(
   token: string,
@@ -169,4 +173,19 @@ export function updateAdminUserRole(
     },
     body: JSON.stringify({ role }),
   })
+}
+
+export function revokeAdminUserSessions(
+  token: string,
+  userId: number
+) {
+  return fetch(
+    `${API_BASE_URL}/api/admin/users/${userId}/sessions`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
 }

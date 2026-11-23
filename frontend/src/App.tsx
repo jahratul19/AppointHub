@@ -13,6 +13,7 @@ import {
   banAdminUser,
   unbanAdminUser,
   updateAdminUserRole,
+  revokeAdminUserSessions,
 
 } from "./services/api"
 
@@ -70,7 +71,19 @@ type AdminUser = {
   role: string
   is_banned: boolean
 }
+
+type AdminUsersResponse = {
+  users: AdminUser[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+}
+
 export default function App() {
+  const [usersPage, setUsersPage] = useState(1)
+  const [usersTotalPages, setUsersTotalPages] = useState(1)
+  const [usersTotal, setUsersTotal] = useState(0)
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -111,6 +124,7 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [authLoading, setAuthLoading] = useState(false)
   const [roleActionUser, setRoleActionUser] = useState<AdminUser | null>(null)
   const [roleActionLoading, setRoleActionLoading] = useState(false)
+  const [sessionActionLoading, setSessionActionLoading] = useState<number | null>(null)
 
 async function handleRoleChange() {
   if (!roleActionUser || !token) return
@@ -144,6 +158,39 @@ async function handleRoleChange() {
     alert(error instanceof Error ? error.message : "Something went wrong.")
   } finally {
     setRoleActionLoading(false)
+  }
+}
+
+async function handleRevokeSessions(user: AdminUser) {
+  if (!token) return
+
+  const confirmed = window.confirm(
+    `Revoke all active sessions for ${user.username}?`
+  )
+
+  if (!confirmed) return
+
+  setSessionActionLoading(user.id)
+  setError("")
+  setMessage("")
+
+  try {
+    const response = await revokeAdminUserSessions(token, user.id)
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Session revocation failed")
+    }
+
+    setMessage(
+      `${data.revoked_sessions} active session(s) revoked for ${user.username}.`
+    )
+  } catch (error) {
+    setError(
+      error instanceof Error ? error.message : "Something went wrong"
+    )
+  } finally {
+    setSessionActionLoading(null)
   }
 }
 
@@ -275,26 +322,30 @@ useEffect(() => {
   }
 
   async function loadAdminUsers() {
-    setUsersLoading(true)
+  setUsersLoading(true)
 
-    try {
-      const response = await getAdminUsers(token!)
+  try {
+    const response = await getAdminUsers(token!, usersPage, 10)
 
-      if (!response.ok) {
-        throw new Error("Failed to load admin users")
-      }
-
-      const data: AdminUser[] = await response.json()
-      setAdminUsers(data)
-    } catch (error) {
-      console.error("Admin users error:", error)
-    } finally {
-      setUsersLoading(false)
+    if (!response.ok) {
+      throw new Error("Failed to load admin users")
     }
+
+    const data: AdminUsersResponse = await response.json()
+
+    setAdminUsers(data.users)
+    setUsersTotal(data.total)
+    setUsersTotalPages(data.total_pages)
+
+  } catch (error) {
+    console.error("Admin users error:", error)
+  } finally {
+    setUsersLoading(false)
   }
+}
 
   void loadAdminUsers()
-}, [token, userRole])
+}, [token, userRole, usersPage])
 
   // AUTHENTICATION
   async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
@@ -315,10 +366,12 @@ try {
   const responseText = await response.text()
   const data = responseText ? JSON.parse(responseText) : {}
       if (!response.ok) {
-        throw new Error(
-          data.detail || "Authentication failed. Please try again."
-        )
-      }
+  const errorMessage = Array.isArray(data.detail)
+    ? data.detail.map((item: any) => item.msg).join(", ")
+    : data.detail || "Authentication failed. Please try again."
+
+  throw new Error(errorMessage)
+}
 
       if (authMode === "register") {
         setMessage("Registration successful! Please log in.")
@@ -808,38 +861,107 @@ try {
   </div>
 )}
 
-        {/* OVERVIEW PAGE */}
-        {page === "overview" && !showAccount && (
+
+{/* OVERVIEW PAGE */}
+{page === "overview" && !showAccount && (
   userRole === "admin" ? (
     <div className="admin-dashboard">
-      <h2>Admin Dashboard</h2>
-      <p>System overview and statistics</p>
+
+      <div className="admin-dashboard-header">
+        <div>
+          <span className="admin-eyebrow">ADMIN WORKSPACE</span>
+          <h2>Admin Dashboard</h2>
+          <p>Monitor your platform and manage operations.</p>
+        </div>
+        <div className="admin-status">
+          <span className="status-dot"></span>
+          System Overview
+        </div>
+      </div>
 
       {adminStats ? (
-        <div className="admin-stats-grid">
-          <div className="admin-stat-card">
-            <h3>Total Users</h3>
-            <p>{adminStats.total_users}</p>
+        <>
+          <div className="admin-stats-grid">
+
+            <div className="admin-stat-card users-card">
+              <div className="stat-card-top">
+                <span>Total Users</span>
+                <span className="stat-icon">👥</span>
+              </div>
+              <p>{adminStats.total_users}</p>
+              <small>Registered accounts</small>
+            </div>
+
+            <div className="admin-stat-card banned-card">
+              <div className="stat-card-top">
+                <span>Banned Users</span>
+                <span className="stat-icon">🚫</span>
+              </div>
+              <p>{adminStats.banned_users}</p>
+              <small>Restricted accounts</small>
+            </div>
+
+            <div className="admin-stat-card appointments-card">
+              <div className="stat-card-top">
+                <span>Total Appointments</span>
+                <span className="stat-icon">📅</span>
+              </div>
+              <p>{adminStats.total_appointments}</p>
+              <small>All booked appointments</small>
+            </div>
+
+            <div className="admin-stat-card pending-card">
+              <div className="stat-card-top">
+                <span>Pending Appointments</span>
+                <span className="stat-icon">⏳</span>
+              </div>
+              <p>{adminStats.pending_appointments}</p>
+              <small>Awaiting confirmation</small>
+            </div>
+
           </div>
 
-          <div className="admin-stat-card">
-            <h3>Banned Users</h3>
-            <p>{adminStats.banned_users}</p>
-          </div>
+          <section className="admin-quick-section">
+            <div className="admin-section-heading">
+              <div>
+                <h3>Quick Actions</h3>
+                <p>Access your main management tools.</p>
+              </div>
+            </div>
 
-          <div className="admin-stat-card">
-            <h3>Total Appointments</h3>
-            <p>{adminStats.total_appointments}</p>
-          </div>
+            <div className="admin-quick-grid">
 
-          <div className="admin-stat-card">
-            <h3>Pending Appointments</h3>
-            <p>{adminStats.pending_appointments}</p>
-          </div>
-        </div>
+              <button
+                className="admin-quick-card"
+                onClick={() => setPage("admin-users")}
+              >
+                <span className="quick-icon">👤</span>
+                <span>
+                  <strong>Manage Users</strong>
+                  <small>View accounts, roles and user status</small>
+                </span>
+                <span className="quick-arrow">→</span>
+              </button>
+
+              <button
+                className="admin-quick-card"
+                onClick={() => setPage("appointments")}
+              >
+                <span className="quick-icon">📋</span>
+                <span>
+                  <strong>Appointments</strong>
+                  <small>View and manage appointments</small>
+                </span>
+                <span className="quick-arrow">→</span>
+              </button>
+
+            </div>
+          </section>
+        </>
       ) : (
         <p>Loading admin statistics...</p>
       )}
+
     </div>
   ) : (
     <DashboardPage
@@ -857,6 +979,7 @@ try {
     />
   )
 )}
+
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (
   <AppointmentsPage
@@ -956,11 +1079,46 @@ try {
 >
   {user.role === "admin" ? "Make User" : "Make Admin"}
 </button>
+<button
+  className="role-change-btn"
+  onClick={() => handleRevokeSessions(user)}
+  disabled={sessionActionLoading === user.id}
+>
+  {sessionActionLoading === user.id
+    ? "Revoking..."
+    : "Revoke Sessions"}
+</button>
 </td>
               </tr>
             ))}
           </tbody>
+        
+        
         </table>
+
+        {/* Pagination */}
+        <div className="users-pagination">
+          <p>
+            Showing page {usersPage} of {usersTotalPages}
+            {" "}({usersTotal} total users)
+          </p>
+
+          <div>
+            <button
+              onClick={() => setUsersPage((prev) => prev - 1)}
+              disabled={usersPage === 1 || usersLoading}
+            >
+              Previous
+            </button>
+
+            <button
+              onClick={() => setUsersPage((prev) => prev + 1)}
+              disabled={usersPage >= usersTotalPages || usersLoading}
+            >
+              Next
+            </button>
+          </div>
+        </div>
 
         {actionUser && (
   <div className="action-modal">
