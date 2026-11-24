@@ -16,6 +16,7 @@ type AuthPageProps = {
   onEmailChange: (value: string) => void
   onPasswordChange: (value: string) => void
   onToggleMode: () => void
+  onBackToHome: () => void
 }
 
 export default function AuthPage({
@@ -31,6 +32,7 @@ export default function AuthPage({
   onEmailChange,
   onPasswordChange,
   onToggleMode,
+  onBackToHome,
 }: AuthPageProps) {
   return (
     <div className="auth-page">
@@ -120,6 +122,13 @@ export default function AuthPage({
             {authMode === "login" ? "Register" : "Login"}
           </button>
         </div>
+        <button
+  type="button"
+  className="back-home-btn"
+  onClick={onBackToHome}
+>
+  ← Back to Home
+</button>
       </div>
     </div>
   )

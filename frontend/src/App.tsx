@@ -27,6 +27,7 @@ import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
+import HomePage from "./pages/HomePage"
 import {
   Eye,
   EyeOff,
@@ -148,6 +149,7 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [statusFilter, setStatusFilter] = useState("all")
   const [roleFilter, setRoleFilter] = useState("all")
   const [authMode, setAuthMode] = useState<AuthMode>("login")
+  const [showHome, setShowHome] = useState(true)
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -553,6 +555,7 @@ try {
     setMessage("You have logged out successfully.")
     setError("")
     setAuthMode("login")
+    setShowHome(true)
   }
 
   function handleChange(
@@ -709,6 +712,24 @@ try {
   }
 
   // AUTHENTICATION SCREEN
+  if (!token && showHome) {
+  return (
+    <HomePage
+      onLogin={() => {
+        setAuthMode("login")
+        setShowHome(false)
+        setError("")
+        setMessage("")
+      }}
+      onRegister={() => {
+        setAuthMode("register")
+        setShowHome(false)
+        setError("")
+        setMessage("")
+      }}
+    />
+  )
+}
   if (!token) {
   return (
     <AuthPage
@@ -728,6 +749,7 @@ try {
         setError("")
         setMessage("")
       }}
+      onBackToHome={() => setShowHome(true)}
     />
   )
 }
