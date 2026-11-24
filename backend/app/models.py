@@ -90,3 +90,34 @@ class AuthSession(Base):
         nullable=True,
     )
 
+class Group(Base):
+    __tablename__ = "groups"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    can_view = Column(Boolean, default=True, nullable=False)
+    can_create = Column(Boolean, default=False, nullable=False)
+    can_edit = Column(Boolean, default=False, nullable=False)
+    can_delete = Column(Boolean, default=False, nullable=False)
+    can_manage_members = Column(Boolean, default=False, nullable=False)
+
+
+class GroupResource(Base):
+    __tablename__ = "group_resources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(150), nullable=False)
+    description = Column(String(1000), nullable=False, default="")
+

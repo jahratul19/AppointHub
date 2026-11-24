@@ -12,7 +12,15 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from .database import get_db
-from .models import User, Appointment, AdminModerationLog, AuthSession
+from .models import (
+    User,
+    Appointment,
+    AdminModerationLog,
+    AuthSession,
+    Group,
+    GroupMember,
+    GroupResource,
+)
 from .schemas import (
     AppointmentCreate,
     AppointmentUpdate,
@@ -27,6 +35,11 @@ from .schemas import (
     AdminUserAction,
     AdminRoleUpdate,
     AdminBulkUserAction,
+    GroupCreate,
+    GroupMemberCreate,
+    GroupPermissionUpdate,
+    GroupResourceCreate,
+    GroupResourceUpdate,
 )
 from .security import decode_access_token
 from .services import (
@@ -631,3 +644,323 @@ def revoke_my_session(
         current_user.id,
         db,
     )
+# GROUP PERMISSION HELPER
+
+def get_group_member(
+    group_id: int,
+    current_user: User,
+    db: Session,
+):
+    group = db.query(Group).filter(
+        Group.id == group_id
+    ).first()
+
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    member = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == current_user.id,
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=403, detail="Group access denied")
+
+    return group, member
+
+
+def check_group_permission(member: GroupMember, permission: str):
+    if not getattr(member, permission):
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission for this action",
+        )
+
+
+# CREATE GROUP
+
+@router.post("/groups")
+def create_group(
+    data: GroupCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Group name is required")
+
+    group = Group(
+        name=data.name.strip(),
+        owner_id=current_user.id,
+    )
+
+    db.add(group)
+    db.flush()
+
+    owner_membership = GroupMember(
+        group_id=group.id,
+        user_id=current_user.id,
+        can_view=True,
+        can_create=True,
+        can_edit=True,
+        can_delete=True,
+        can_manage_members=True,
+    )
+
+    db.add(owner_membership)
+    db.commit()
+    db.refresh(group)
+
+    return {
+        "id": group.id,
+        "name": group.name,
+        "owner_id": group.owner_id,
+    }
+
+
+# VIEW MY GROUPS
+
+@router.get("/groups")
+def get_my_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    memberships = db.query(GroupMember).filter(
+        GroupMember.user_id == current_user.id
+    ).all()
+
+    result = []
+
+    for membership in memberships:
+        group = db.query(Group).filter(
+            Group.id == membership.group_id
+        ).first()
+
+        if group:
+            result.append({
+                "id": group.id,
+                "name": group.name,
+                "owner_id": group.owner_id,
+            })
+
+    return result
+
+
+# ADD GROUP MEMBER
+
+@router.post("/groups/{group_id}/members")
+def add_group_member(
+    group_id: int,
+    data: GroupMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_manage_members")
+
+    user = db.query(User).filter(
+        User.email == data.email
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    existing = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == user.id,
+    ).first()
+
+    if existing:
+        raise HTTPException(status_code=400, detail="User is already a member")
+
+    new_member = GroupMember(
+        group_id=group_id,
+        user_id=user.id,
+        can_view=True,
+        can_create=False,
+        can_edit=False,
+        can_delete=False,
+        can_manage_members=False,
+    )
+
+    db.add(new_member)
+    db.commit()
+
+    return {"message": "Member added successfully"}
+
+
+# VIEW GROUP MEMBERS
+
+@router.get("/groups/{group_id}/members")
+def get_group_members(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_manage_members")
+
+    memberships = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id
+    ).all()
+
+    result = []
+
+    for item in memberships:
+        user = db.query(User).filter(
+            User.id == item.user_id
+        ).first()
+
+        if user:
+            result.append({
+                "user_id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "can_view": item.can_view,
+                "can_create": item.can_create,
+                "can_edit": item.can_edit,
+                "can_delete": item.can_delete,
+                "can_manage_members": item.can_manage_members,
+            })
+
+    return result
+
+
+# UPDATE MEMBER PERMISSIONS
+
+@router.put("/groups/{group_id}/members/{user_id}/permissions")
+def update_group_permissions(
+    group_id: int,
+    user_id: int,
+    data: GroupPermissionUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_manage_members")
+
+    target = db.query(GroupMember).filter(
+        GroupMember.group_id == group_id,
+        GroupMember.user_id == user_id,
+    ).first()
+
+    if not target:
+        raise HTTPException(status_code=404, detail="Group member not found")
+
+    if user_id == group.owner_id:
+        raise HTTPException(status_code=400, detail="Owner permissions cannot be changed")
+
+    target.can_view = data.can_view
+    target.can_create = data.can_create
+    target.can_edit = data.can_edit
+    target.can_delete = data.can_delete
+    target.can_manage_members = data.can_manage_members
+
+    db.commit()
+
+    return {"message": "Permissions updated successfully"}
+
+
+# VIEW GROUP RESOURCES
+
+@router.get("/groups/{group_id}/resources")
+def get_group_resources(
+    group_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_view")
+
+    resources = db.query(GroupResource).filter(
+        GroupResource.group_id == group_id
+    ).all()
+
+    return resources
+
+
+# CREATE GROUP RESOURCE
+
+@router.post("/groups/{group_id}/resources")
+def create_group_resource(
+    group_id: int,
+    data: GroupResourceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_create")
+
+    if not data.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+
+    resource = GroupResource(
+        group_id=group_id,
+        created_by=current_user.id,
+        title=data.title.strip(),
+        description=data.description,
+    )
+
+    db.add(resource)
+    db.commit()
+    db.refresh(resource)
+
+    return resource
+
+
+# UPDATE GROUP RESOURCE
+
+@router.put("/groups/{group_id}/resources/{resource_id}")
+def update_group_resource(
+    group_id: int,
+    resource_id: int,
+    data: GroupResourceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_edit")
+
+    resource = db.query(GroupResource).filter(
+        GroupResource.id == resource_id,
+        GroupResource.group_id == group_id,
+    ).first()
+
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    if not data.title.strip():
+        raise HTTPException(status_code=400, detail="Title is required")
+
+    resource.title = data.title.strip()
+    resource.description = data.description
+
+    db.commit()
+    db.refresh(resource)
+
+    return resource
+
+
+# DELETE GROUP RESOURCE
+
+@router.delete("/groups/{group_id}/resources/{resource_id}")
+def delete_group_resource(
+    group_id: int,
+    resource_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    group, member = get_group_member(group_id, current_user, db)
+    check_group_permission(member, "can_delete")
+
+    resource = db.query(GroupResource).filter(
+        GroupResource.id == resource_id,
+        GroupResource.group_id == group_id,
+    ).first()
+
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    db.delete(resource)
+    db.commit()
+
+    return {"message": "Resource deleted successfully"}

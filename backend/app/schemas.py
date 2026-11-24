@@ -76,3 +76,27 @@ class AdminBulkUserAction(BaseModel):
     user_ids: list[int]
     reason: str
     action: str
+
+class GroupCreate(BaseModel):
+    name: str
+
+
+class GroupMemberCreate(BaseModel):
+    email: EmailStr
+
+
+class GroupPermissionUpdate(BaseModel):
+    can_view: bool
+    can_create: bool
+    can_edit: bool
+    can_delete: bool
+    can_manage_members: bool
+
+class GroupResourceCreate(BaseModel):
+    title: str
+    description: str = ""
+
+
+class GroupResourceUpdate(BaseModel):
+    title: str
+    description: str = ""
