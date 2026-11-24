@@ -20,13 +20,28 @@ import {
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
+import GroupsPage from "./pages/GroupsPage"
 import AppointmentsPage from "./pages/AppointmentsPage"
 import DashboardPage from "./pages/DashboardPage"
 import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
-import { Eye, EyeOff } from "lucide-react"
+import {
+  Eye,
+  EyeOff,
+  Stethoscope,
+  Users,
+  Ban,
+  CalendarDays,
+  Clock3,
+  Search,
+  ShieldCheck,
+  UserRound,
+  Activity,
+} from "lucide-react"
+
+import "./AdminDesign.css"
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -766,7 +781,9 @@ return matchesSearch && matchesStatus && matchesRole
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon">A</div>
+          <div className="brand-icon">
+  <Stethoscope size={25} strokeWidth={2.2} />
+</div>
           <span>
             Appoint<span>HUB</span>
           </span>
@@ -807,6 +824,12 @@ return matchesSearch && matchesStatus && matchesRole
   onClick={() => setPage("admin-audit-logs")}
 >
   <span className="nav-icon">▤</span> Audit Logs
+</button>
+<button
+  className="nav-item"
+  onClick={() => setPage("groups" as Page)}
+>
+  <span className="nav-icon">♧</span> Groups & Teams
 </button>
         </nav>
 
@@ -978,7 +1001,9 @@ return matchesSearch && matchesStatus && matchesRole
             <div className="admin-stat-card users-card">
               <div className="stat-card-top">
                 <span>Total Users</span>
-                <span className="stat-icon">👥</span>
+                <span className="stat-icon">
+  <Users size={21} />
+</span>
               </div>
               <p>{adminStats.total_users}</p>
               <small>Registered accounts</small>
@@ -987,7 +1012,9 @@ return matchesSearch && matchesStatus && matchesRole
             <div className="admin-stat-card banned-card">
               <div className="stat-card-top">
                 <span>Banned Users</span>
-                <span className="stat-icon">🚫</span>
+                <span className="stat-icon">
+  <Ban size={21} />
+</span>
               </div>
               <p>{adminStats.banned_users}</p>
               <small>Restricted accounts</small>
@@ -996,7 +1023,9 @@ return matchesSearch && matchesStatus && matchesRole
             <div className="admin-stat-card appointments-card">
               <div className="stat-card-top">
                 <span>Total Appointments</span>
-                <span className="stat-icon">📅</span>
+                <span className="stat-icon">
+  <CalendarDays size={21} />
+</span>
               </div>
               <p>{adminStats.total_appointments}</p>
               <small>All booked appointments</small>
@@ -1005,7 +1034,9 @@ return matchesSearch && matchesStatus && matchesRole
             <div className="admin-stat-card pending-card">
               <div className="stat-card-top">
                 <span>Pending Appointments</span>
-                <span className="stat-icon">⏳</span>
+                <span className="stat-icon">
+  <Clock3 size={21} />
+</span>
               </div>
               <p>{adminStats.pending_appointments}</p>
               <small>Awaiting confirmation</small>
@@ -1208,7 +1239,7 @@ return matchesSearch && matchesStatus && matchesRole
                 <td>
 
                   <button
-  className="role-change-btn"
+  className="user-action-btn details-btn"
   onClick={() => setSelectedAdminUser(user)}
 >
   Details
@@ -1227,13 +1258,13 @@ return matchesSearch && matchesStatus && matchesRole
   )}
 
   <button
-  className="role-change-btn"
+  className="user-action-btn role-btn"
   onClick={() => setRoleActionUser(user)}
 >
   {user.role === "admin" ? "Make User" : "Make Admin"}
 </button>
 <button
-  className="role-change-btn"
+  className="user-action-btn revoke-btn"
   onClick={() => handleRevokeSessions(user)}
   disabled={sessionActionLoading === user.id}
 >
@@ -1418,6 +1449,11 @@ return matchesSearch && matchesStatus && matchesRole
       </div>
     )}
   </div>
+)}
+
+{/* GROUPS PAGE */}
+{page === ("groups" as Page) && (
+  <GroupsPage token={token!} />
 )}
 
         {/* HELP PAGE */}

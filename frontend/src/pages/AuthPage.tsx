@@ -1,6 +1,7 @@
 
 import type { FormEvent } from "react"
 import type { AuthMode } from "../types"
+import { Stethoscope } from "lucide-react"
 
 type AuthPageProps = {
   authMode: AuthMode
@@ -35,7 +36,9 @@ export default function AuthPage({
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <div className="brand-icon">A</div>
+          <div className="brand-icon">
+  <Stethoscope size={25} strokeWidth={2.2} />
+</div>
           <h1>AppointHUB</h1>
           <p>YOUR APPOINTMENT MANAGEMENT PLATFORM</p>
         </div>
