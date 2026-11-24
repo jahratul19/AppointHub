@@ -216,6 +216,56 @@ def get_admin_users(
         "total_pages": (total_users + limit - 1) // limit,
     }
 
+@router.put("/admin/users/{user_id}/ban")
+def ban_admin_user(
+    user_id: int,
+    action_data: AdminUserAction,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if not action_data.reason.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Ban reason is required",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found",
+        )
+
+    if user.id == current_admin.id or user.role == "admin":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot ban this user",
+        )
+
+    user.is_banned = True
+
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id,
+        AuthSession.revoked_at.is_(None),
+    ).update(
+        {"revoked_at": datetime.now(timezone.utc)},
+        synchronize_session=False,
+    )
+
+    db.add(
+        AdminModerationLog(
+            admin_user_id=current_admin.id,
+            target_user_id=user.id,
+            action="ban",
+            reason=action_data.reason.strip(),
+        )
+    )
+
+    db.commit()
+
+    return {"message": "User banned successfully"}
+
 
 @router.put("/admin/users/{user_id}/unban")
 def unban_admin_user(
