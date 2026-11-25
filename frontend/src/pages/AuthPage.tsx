@@ -1,6 +1,7 @@
 
 import type { FormEvent } from "react"
 import type { AuthMode } from "../types"
+import { Stethoscope } from "lucide-react"
 
 type AuthPageProps = {
   authMode: AuthMode
@@ -15,6 +16,7 @@ type AuthPageProps = {
   onEmailChange: (value: string) => void
   onPasswordChange: (value: string) => void
   onToggleMode: () => void
+  onBackToHome: () => void
 }
 
 export default function AuthPage({
@@ -30,12 +32,15 @@ export default function AuthPage({
   onEmailChange,
   onPasswordChange,
   onToggleMode,
+  onBackToHome,
 }: AuthPageProps) {
   return (
     <div className="auth-page">
       <div className="auth-card">
         <div className="auth-brand">
-          <div className="brand-icon">A</div>
+          <div className="brand-icon">
+  <Stethoscope size={25} strokeWidth={2.2} />
+</div>
           <h1>AppointHUB</h1>
           <p>YOUR APPOINTMENT MANAGEMENT PLATFORM</p>
         </div>
@@ -117,6 +122,13 @@ export default function AuthPage({
             {authMode === "login" ? "Register" : "Login"}
           </button>
         </div>
+        <button
+  type="button"
+  className="back-home-btn"
+  onClick={onBackToHome}
+>
+  ← Back to Home
+</button>
       </div>
     </div>
   )

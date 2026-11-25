@@ -8,16 +8,41 @@ import {
   logout as logoutApi,
   updateProfile,
   changePassword,
+  getAdminDashboardStats,
+  getAdminUsers,
+  banAdminUser,
+  unbanAdminUser,
+  updateAdminUserRole,
+  revokeAdminUserSessions,
+  getAdminAuditLogs,
+  bulkAdminUserAction,
+
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
+import GroupsPage from "./pages/GroupsPage"
 import AppointmentsPage from "./pages/AppointmentsPage"
 import DashboardPage from "./pages/DashboardPage"
 import AuthPage from "./pages/AuthPage"
 import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
 import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
-import { Eye, EyeOff } from "lucide-react"
+import HomePage from "./pages/HomePage"
+import {
+  Eye,
+  EyeOff,
+  Stethoscope,
+  Users,
+  Ban,
+  CalendarDays,
+  Clock3,
+  Search,
+  ShieldCheck,
+  UserRound,
+  Activity,
+} from "lucide-react"
+
+import "./AdminDesign.css"
 
 const emptyForm: AppointmentForm = {
   customer_name: "",
@@ -28,7 +53,65 @@ const emptyForm: AppointmentForm = {
 
 }
 
+function getRoleFromToken(token: string): string {
+  try {
+    const payload = token.split(".")[1]
+    const normalized = payload
+      .replace(/-/g, "+")
+      .replace(/_/g, "/")
+
+    const padded = normalized.padEnd(
+      normalized.length + (4 - normalized.length % 4) % 4,
+      "="
+    )
+
+    const decoded = JSON.parse(atob(padded))
+
+    return typeof decoded.role === "string"
+      ? decoded.role
+      : "user"
+  } catch {
+    return "user"
+  }
+}
+
+type AdminDashboardStats = {
+  total_users: number
+  banned_users: number
+  total_appointments: number
+  pending_appointments: number
+}
+
+type AdminUser = {
+  id: number
+  username: string
+  email: string
+  role: string
+  is_banned: boolean
+}
+
+type AdminAuditLog = {
+  id: number
+  admin_username: string
+  target_username: string
+  action: string
+  reason: string
+  created_at: string | null
+}
+
+type AdminUsersResponse = {
+  users: AdminUser[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+}
+
 export default function App() {
+  const [usersPage, setUsersPage] = useState(1)
+  const [usersTotalPages, setUsersTotalPages] = useState(1)
+  const [usersTotal, setUsersTotal] = useState(0)
+  const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
@@ -42,14 +125,189 @@ export default function App() {
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState("All")
   const [page, setPage] = useState<Page>("overview")
+  const [adminUserFilter, setAdminUserFilter] = useState<
+  "all" | "banned"
+>("all")
+
+const [adminAppointmentFilter, setAdminAppointmentFilter] =
+  useState<"all" | "pending">("all")
 
   // AUTHENTICATION STATE
   const [token, setToken] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string>("user")
+  const [adminStats, setAdminStats] =
+  useState<AdminDashboardStats | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [actionUser, setActionUser] = useState<AdminUser | null>(null)
+  const [selectedAdminUser, setSelectedAdminUser] =
+  useState<AdminUser | null>(null)
+  const [actionReason, setActionReason] = useState("")
+  const [actionLoading, setActionLoading] = useState(false)
+  const [actionMessage, setActionMessage] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [roleFilter, setRoleFilter] = useState("all")
   const [authMode, setAuthMode] = useState<AuthMode>("login")
+  const [showHome, setShowHome] = useState(true)
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(false)
+  const [roleActionUser, setRoleActionUser] = useState<AdminUser | null>(null)
+  const [roleActionLoading, setRoleActionLoading] = useState(false)
+  const [sessionActionLoading, setSessionActionLoading] = useState<number | null>(null)
+  const [selectedBulkUserIds, setSelectedBulkUserIds] = useState<number[]>([])
+  const [bulkReason, setBulkReason] = useState("")
+  const [bulkActionLoading, setBulkActionLoading] = useState(false)
+
+async function handleRoleChange() {
+  if (!roleActionUser || !token) return
+
+  const newRole = roleActionUser.role === "admin" ? "user" : "admin"
+
+  setRoleActionLoading(true)
+
+  try {
+    const response = await updateAdminUserRole(
+      token,
+      roleActionUser.id,
+      newRole
+    )
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || "Role update failed")
+    }
+
+    setAdminUsers((previousUsers) =>
+      previousUsers.map((user) =>
+        user.id === roleActionUser.id
+          ? { ...user, role: newRole }
+          : user
+      )
+    )
+
+    setRoleActionUser(null)
+  } catch (error) {
+    alert(error instanceof Error ? error.message : "Something went wrong.")
+  } finally {
+    setRoleActionLoading(false)
+  }
+}
+
+async function handleRevokeSessions(user: AdminUser) {
+  if (!token) return
+
+  const confirmed = window.confirm(
+    `Revoke all active sessions for ${user.username}?`
+  )
+
+  if (!confirmed) return
+
+  setSessionActionLoading(user.id)
+  setError("")
+  setMessage("")
+
+  try {
+    const response = await revokeAdminUserSessions(token, user.id)
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Session revocation failed")
+    }
+
+    setMessage(
+      `${data.revoked_sessions} active session(s) revoked for ${user.username}.`
+    )
+  } catch (error) {
+    setError(
+      error instanceof Error ? error.message : "Something went wrong"
+    )
+  } finally {
+    setSessionActionLoading(null)
+  }
+}
+
+
+async function handleUserAction() {
+  if (!actionUser || !actionReason.trim() || !token) {
+    setActionMessage("Please enter a reason.")
+    return
+  }
+
+  setActionLoading(true)
+  setActionMessage("")
+
+  try {
+    const response = actionUser.is_banned
+      ? await unbanAdminUser(token, actionUser.id, actionReason)
+      : await banAdminUser(token, actionUser.id, actionReason)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.detail || "Action failed")
+    }
+
+    setAdminUsers((previousUsers) =>
+      previousUsers.map((user) =>
+        user.id === actionUser.id
+          ? { ...user, is_banned: !user.is_banned }
+          : user
+      )
+    )
+
+    setActionMessage("User status updated successfully.")
+    setActionUser(null)
+    setActionReason("")
+  } catch (error) {
+    setActionMessage(
+      error instanceof Error ? error.message : "Something went wrong."
+    )
+  } finally {
+    setActionLoading(false)
+  }
+}
+async function handleBulkUserAction(action: "ban" | "unban") {
+  if (!token || selectedBulkUserIds.length === 0 || !bulkReason.trim()) {
+    return
+  }
+
+  setBulkActionLoading(true)
+  setError("")
+  setMessage("")
+
+  try {
+    const response = await bulkAdminUserAction(
+      token,
+      selectedBulkUserIds,
+      action,
+      bulkReason
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(data.detail || "Bulk action failed")
+    }
+
+    const usersResponse = await getAdminUsers(token, usersPage, 10)
+
+    if (!usersResponse.ok) {
+      throw new Error("Action completed, but users could not be reloaded.")
+    }
+
+    const usersData: AdminUsersResponse = await usersResponse.json()
+    setAdminUsers(usersData.users)
+    setSelectedBulkUserIds([])
+    setBulkReason("")
+    setMessage("Bulk action completed successfully.")
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Something went wrong")
+  } finally {
+    setBulkActionLoading(false)
+  }
+}
 
   async function loadAppointments() {
     setLoading(true)
@@ -91,6 +349,7 @@ useEffect(() => {
       if (response.ok) {
         const data = await response.json()
         setToken(data.access_token)
+        setUserRole(getRoleFromToken(data.access_token))
       }
     } catch {
       // User stays logged out if session restoration fails.
@@ -106,6 +365,85 @@ useEffect(() => {
       void loadAppointments()
     }
   }, [token])
+
+  useEffect(() => {
+  if (!token || userRole !== "admin") {
+    setAdminStats(null)
+    return
+  }
+
+  async function loadAdminStats() {
+    try {
+      const response = await getAdminDashboardStats(token!)
+
+      if (!response.ok) {
+        throw new Error("Failed to load admin statistics")
+      }
+
+      const data: AdminDashboardStats = await response.json()
+      setAdminStats(data)
+    } catch (error) {
+      console.error("Admin statistics error:", error)
+    }
+  }
+
+  void loadAdminStats()
+}, [token, userRole])
+
+useEffect(() => {
+  if (!token || userRole !== "admin") {
+    setAdminUsers([])
+    return
+  }
+
+  async function loadAdminUsers() {
+  setUsersLoading(true)
+
+  try {
+    const response = await getAdminUsers(token!, usersPage, 10)
+
+    if (!response.ok) {
+      throw new Error("Failed to load admin users")
+    }
+
+    const data: AdminUsersResponse = await response.json()
+
+    setAdminUsers(data.users)
+    setUsersTotal(data.total)
+    setUsersTotalPages(data.total_pages)
+
+  } catch (error) {
+    console.error("Admin users error:", error)
+  } finally {
+    setUsersLoading(false)
+  }
+}
+
+  void loadAdminUsers()
+}, [token, userRole, usersPage])
+
+async function loadAuditLogs() {
+  if (!token || userRole !== "admin") return
+
+  try {
+    const response = await getAdminAuditLogs(token)
+
+    if (!response.ok) {
+      throw new Error("Failed to load audit logs")
+    }
+
+    const data = await response.json()
+    setAuditLogs(data)
+  } catch (error) {
+    console.error("Audit logs loading error:", error)
+  }
+}
+
+useEffect(() => {
+  if (page === "admin-audit-logs") {
+    void loadAuditLogs()
+  }
+}, [page, token, userRole])
 
   // AUTHENTICATION
   async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
@@ -126,10 +464,12 @@ try {
   const responseText = await response.text()
   const data = responseText ? JSON.parse(responseText) : {}
       if (!response.ok) {
-        throw new Error(
-          data.detail || "Authentication failed. Please try again."
-        )
-      }
+  const errorMessage = Array.isArray(data.detail)
+    ? data.detail.map((item: any) => item.msg).join(", ")
+    : data.detail || "Authentication failed. Please try again."
+
+  throw new Error(errorMessage)
+}
 
       if (authMode === "register") {
         setMessage("Registration successful! Please log in.")
@@ -138,6 +478,7 @@ try {
         setPassword("")
       } else {
         setToken(data.access_token)
+        setUserRole(getRoleFromToken(data.access_token))
         setPassword("")
         setMessage("Login successful!")
       }
@@ -204,6 +545,7 @@ try {
   
   function handleLogout() {
     setToken(null)
+    setUserRole("user")
     setAppointments([])
     setSelected(null)
     setShowForm(false)
@@ -213,6 +555,7 @@ try {
     setMessage("You have logged out successfully.")
     setError("")
     setAuthMode("login")
+    setShowHome(true)
   }
 
   function handleChange(
@@ -369,6 +712,24 @@ try {
   }
 
   // AUTHENTICATION SCREEN
+  if (!token && showHome) {
+  return (
+    <HomePage
+      onLogin={() => {
+        setAuthMode("login")
+        setShowHome(false)
+        setError("")
+        setMessage("")
+      }}
+      onRegister={() => {
+        setAuthMode("register")
+        setShowHome(false)
+        setError("")
+        setMessage("")
+      }}
+    />
+  )
+}
   if (!token) {
   return (
     <AuthPage
@@ -388,6 +749,7 @@ try {
         setError("")
         setMessage("")
       }}
+      onBackToHome={() => setShowHome(true)}
     />
   )
 }
@@ -422,11 +784,28 @@ try {
     .sort((a, b) => b.id - a.id)
     .slice(0, 5)
 
-  return (
+  const filteredAdminUsers = adminUsers.filter((user) => {
+  const matchesSearch =
+    user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+  const matchesStatus =
+  statusFilter === "all" ||
+  (statusFilter === "active" && !user.is_banned) ||
+  (statusFilter === "banned" && user.is_banned)
+
+const matchesRole =
+  roleFilter === "all" || user.role === roleFilter
+
+return matchesSearch && matchesStatus && matchesRole
+})
+    return (
     <div className="app-layout">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-icon">A</div>
+          <div className="brand-icon">
+  <Stethoscope size={25} strokeWidth={2.2} />
+</div>
           <span>
             Appoint<span>HUB</span>
           </span>
@@ -452,6 +831,28 @@ try {
           >
             <span className="nav-icon">▤</span> Appointments
           </button>
+                    <button
+            className={`nav-item ${
+              page === "admin-users" ? "active" : ""
+            }`}
+            onClick={() => setPage("admin-users")}
+          >
+            <span className="nav-icon">♙</span> Users
+          </button>
+          <button
+  className={`nav-item ${
+    page === "admin-audit-logs" ? "active" : ""
+  }`}
+  onClick={() => setPage("admin-audit-logs")}
+>
+  <span className="nav-icon">▤</span> Audit Logs
+</button>
+<button
+  className="nav-item"
+  onClick={() => setPage("groups" as Page)}
+>
+  <span className="nav-icon">♧</span> Groups & Teams
+</button>
         </nav>
 
         <div className="sidebar-bottom">
@@ -466,6 +867,9 @@ try {
               Get assistance →
             </span>
           </button>
+
+        
+
 
           <div className="profile">
             <div className="avatar">A</div>
@@ -594,22 +998,133 @@ try {
   </div>
 )}
 
-        {/* OVERVIEW PAGE */}
-        {page === "overview" && !showAccount && (
-  <DashboardPage
-    appointments={appointments}
-    pending={pending}
-    confirmed={confirmed}
-    completed={completed}
-    recentAppointments={recentAppointments}
-    loading={loading}
-    onNewAppointment={openNewForm}
-    onView={viewAppointment}
-    onEdit={editAppointment}
-    onDelete={deleteAppointment}
-    onViewAll={() => setPage("appointments")}
-  />
+
+{/* OVERVIEW PAGE */}
+{page === "overview" && !showAccount && (
+  userRole === "admin" ? (
+    <div className="admin-dashboard">
+
+      <div className="admin-dashboard-header">
+        <div>
+          <span className="admin-eyebrow">ADMIN WORKSPACE</span>
+          <h2>Admin Dashboard</h2>
+          <p>Monitor your platform and manage operations.</p>
+        </div>
+        <div className="admin-status">
+          <span className="status-dot"></span>
+          System Overview
+        </div>
+      </div>
+
+      {adminStats ? (
+        <>
+          <div className="admin-stats-grid">
+
+            <div className="admin-stat-card users-card">
+              <div className="stat-card-top">
+                <span>Total Users</span>
+                <span className="stat-icon">
+  <Users size={21} />
+</span>
+              </div>
+              <p>{adminStats.total_users}</p>
+              <small>Registered accounts</small>
+            </div>
+
+            <div className="admin-stat-card banned-card">
+              <div className="stat-card-top">
+                <span>Banned Users</span>
+                <span className="stat-icon">
+  <Ban size={21} />
+</span>
+              </div>
+              <p>{adminStats.banned_users}</p>
+              <small>Restricted accounts</small>
+            </div>
+
+            <div className="admin-stat-card appointments-card">
+              <div className="stat-card-top">
+                <span>Total Appointments</span>
+                <span className="stat-icon">
+  <CalendarDays size={21} />
+</span>
+              </div>
+              <p>{adminStats.total_appointments}</p>
+              <small>All booked appointments</small>
+            </div>
+
+            <div className="admin-stat-card pending-card">
+              <div className="stat-card-top">
+                <span>Pending Appointments</span>
+                <span className="stat-icon">
+  <Clock3 size={21} />
+</span>
+              </div>
+              <p>{adminStats.pending_appointments}</p>
+              <small>Awaiting confirmation</small>
+            </div>
+
+          </div>
+
+          <section className="admin-quick-section">
+            <div className="admin-section-heading">
+              <div>
+                <h3>Quick Actions</h3>
+                <p>Access your main management tools.</p>
+              </div>
+            </div>
+
+            <div className="admin-quick-grid">
+
+              <button
+                className="admin-quick-card"
+                onClick={() => setPage("admin-users")}
+              >
+                <span className="quick-icon">👤</span>
+                <span>
+                  <strong>Manage Users</strong>
+                  <small>View accounts, roles and user status</small>
+                </span>
+                <span className="quick-arrow">→</span>
+              </button>
+
+              <button
+                className="admin-quick-card"
+                onClick={() => setPage("appointments")}
+              >
+                <span className="quick-icon">📋</span>
+                <span>
+                  <strong>Appointments</strong>
+                  <small>View and manage appointments</small>
+                </span>
+                <span className="quick-arrow">→</span>
+              </button>
+
+            </div>
+          </section>
+        </>
+      ) : (
+        <p>Loading admin statistics...</p>
+      )}
+
+    </div>
+  ) : (
+    <DashboardPage
+      appointments={appointments}
+      pending={pending}
+      confirmed={confirmed}
+      completed={completed}
+      recentAppointments={recentAppointments}
+      loading={loading}
+      onNewAppointment={openNewForm}
+      onView={viewAppointment}
+      onEdit={editAppointment}
+      onDelete={deleteAppointment}
+      onViewAll={() => setPage("appointments")}
+    />
+  )
 )}
+
         {/* APPOINTMENTS PAGE */}
         {page === "appointments" && (
   <AppointmentsPage
@@ -631,6 +1146,336 @@ try {
     onEdit={editAppointment}
     onDelete={deleteAppointment}
   />
+)}
+
+{/* ADMIN USERS PAGE */}
+{page === "admin-users" && (
+  <div className="admin-users-page">
+    <h2>Manage Users</h2>
+    <div className="users-controls">
+  <input
+    type="text"
+    placeholder="Search by username or email..."
+    value={searchTerm}
+    onChange={(e) => setSearchTerm(e.target.value)}
+  />
+
+  <select
+    value={statusFilter}
+    onChange={(e) => setStatusFilter(e.target.value)}
+  >
+    <option value="all">All Users</option>
+    <option value="active">Active Users</option>
+    <option value="banned">Banned Users</option>
+  </select>
+  <select
+  value={roleFilter}
+  onChange={(e) => setRoleFilter(e.target.value)}
+>
+  <option value="all">All Roles</option>
+  <option value="admin">Admins</option>
+  <option value="user">Users</option>
+</select>
+</div>
+    <p>View and manage registered users.</p>
+
+    <div className="bulk-actions">
+  <p>Selected users: {selectedBulkUserIds.length}</p>
+
+  <textarea
+    value={bulkReason}
+    onChange={(e) => setBulkReason(e.target.value)}
+    placeholder="Enter reason for bulk action..."
+  />
+
+  <div className="bulk-action-buttons">
+    
+    <button
+  className="ban-user-btn"
+  onClick={() => handleBulkUserAction("ban")}
+      disabled={bulkActionLoading || selectedBulkUserIds.length === 0 || !bulkReason.trim()}
+    >
+      Bulk Ban
+    </button>
+
+    <button
+  className="unban-user-btn"
+  onClick={() => handleBulkUserAction("unban")}
+      disabled={bulkActionLoading || selectedBulkUserIds.length === 0 || !bulkReason.trim()}
+    >
+      Bulk Unban
+    </button>
+  </div>
+</div>
+
+    {usersLoading ? (
+      <p>Loading users...</p>
+    ) : filteredAdminUsers.length === 0 ? (
+      <p>No users found.</p>
+    ) : (
+      <div className="admin-users-table">
+        <table>
+          <thead>
+  <tr>
+    <th>Select</th>
+    <th>ID</th>
+    <th>Username</th>
+    <th>Email</th>
+    <th>Role</th>
+    <th>Status</th>
+    <th>Actions</th>
+  </tr>
+</thead>
+          
+
+          <tbody>
+            {filteredAdminUsers.map((user) => (
+              <tr key={user.id}>
+                <td>
+  {user.role !== "admin" && (
+    <input
+      type="checkbox"
+      checked={selectedBulkUserIds.includes(user.id)}
+      onChange={(e) => {
+        setSelectedBulkUserIds((previous) =>
+          e.target.checked
+            ? [...previous, user.id]
+            : previous.filter((id) => id !== user.id)
+        )
+      }}
+    />
+  )}
+</td>
+                <td>{user.id}</td>
+                <td>{user.username}</td>
+                <td>{user.email}</td>
+                <td>
+  <span className={user.role === "admin" ? "admin-role" : ""}>
+    {user.role}
+  </span>
+</td>
+                <td>
+                  {user.is_banned ? "Banned" : "Active"}
+                </td>
+
+                <td>
+
+                  <button
+  className="user-action-btn details-btn"
+  onClick={() => setSelectedAdminUser(user)}
+>
+  Details
+</button>
+  {user.role !== "admin" && (
+    <button
+  className={user.is_banned ? "unban-user-btn" : "ban-user-btn"}
+  onClick={() => {
+    setActionUser(user)
+    setActionReason("")
+    setActionMessage("")
+  }}
+>
+  {user.is_banned ? "Unban" : "Ban"}
+</button>
+  )}
+
+  <button
+  className="user-action-btn role-btn"
+  onClick={() => setRoleActionUser(user)}
+>
+  {user.role === "admin" ? "Make User" : "Make Admin"}
+</button>
+<button
+  className="user-action-btn revoke-btn"
+  onClick={() => handleRevokeSessions(user)}
+  disabled={sessionActionLoading === user.id}
+>
+  {sessionActionLoading === user.id
+    ? "Revoking..."
+    : "Revoke Sessions"}
+</button>
+</td>
+              </tr>
+            ))}
+          </tbody>
+        
+        
+        </table>
+
+        {/* Pagination */}
+        <div className="users-pagination">
+          <p>
+            Showing page {usersPage} of {usersTotalPages}
+            {" "}({usersTotal} total users)
+          </p>
+
+          <div>
+            <button
+              onClick={() => setUsersPage((prev) => prev - 1)}
+              disabled={usersPage === 1 || usersLoading}
+            >
+              Previous
+            </button>
+
+            <button
+              onClick={() => setUsersPage((prev) => prev + 1)}
+              disabled={usersPage >= usersTotalPages || usersLoading}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        {actionUser && (
+  <div className="action-modal">
+    <h3>
+      {actionUser.is_banned ? "Unban User" : "Ban User"}
+    </h3>
+
+    <p>
+      Enter a reason for this action.
+    </p>
+
+    <textarea
+      value={actionReason}
+      onChange={(e) => setActionReason(e.target.value)}
+      placeholder="Write reason here..."
+    />
+
+    {actionMessage && <p>{actionMessage}</p>}
+
+    <button
+      onClick={handleUserAction}
+      disabled={actionLoading || !actionReason.trim()}
+    >
+      {actionLoading ? "Processing..." : "Confirm"}
+    </button>
+
+    <button
+      onClick={() => {
+        setActionUser(null)
+        setActionReason("")
+        setActionMessage("")
+      }}
+    >
+      Cancel
+    </button>
+  </div>
+)}
+      </div>
+    )}
+
+    {selectedAdminUser && (
+  <div className="action-modal">
+    <h3>User Details</h3>
+
+    <p>
+      <strong>User ID:</strong> {selectedAdminUser.id}
+    </p>
+
+    <p>
+      <strong>Username:</strong> {selectedAdminUser.username}
+    </p>
+
+    <p>
+      <strong>Email:</strong> {selectedAdminUser.email}
+    </p>
+
+    <p>
+      <strong>Role:</strong> {selectedAdminUser.role}
+    </p>
+
+    <p>
+      <strong>Account Status:</strong>{" "}
+      {selectedAdminUser.is_banned ? "Banned" : "Active"}
+    </p>
+
+    <button
+      onClick={() => setSelectedAdminUser(null)}
+    >
+      Close
+    </button>
+  </div>
+)}
+
+    {roleActionUser && (
+  <div className="action-modal">
+    <h3>
+      {roleActionUser.role === "admin"
+        ? "Change Admin to User?"
+        : "Make User an Admin?"}
+    </h3>
+
+    <p>
+      Are you sure you want to change the role of{" "}
+      {roleActionUser.username}?
+    </p>
+
+    <button
+      onClick={handleRoleChange}
+      disabled={roleActionLoading}
+    >
+      {roleActionLoading ? "Processing..." : "Confirm"}
+    </button>
+
+    <button
+      onClick={() => setRoleActionUser(null)}
+      disabled={roleActionLoading}
+    >
+      Cancel
+    </button>
+  </div>
+)}
+  </div>
+)}
+
+{/* ADMIN AUDIT LOGS PAGE */}
+{page === "admin-audit-logs" && (
+  <div className="admin-users-page">
+    <h2>Admin Audit Logs</h2>
+    <p>Review recent administrative actions.</p>
+
+    {auditLogs.length === 0 ? (
+      <p>No audit logs found.</p>
+    ) : (
+      <div className="admin-users-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Admin</th>
+              <th>Target User</th>
+              <th>Action</th>
+              <th>Reason</th>
+              <th>Date & Time</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {auditLogs.map((log) => (
+              <tr key={log.id}>
+                <td>{log.id}</td>
+                <td>{log.admin_username}</td>
+                <td>{log.target_username}</td>
+                <td>{log.action}</td>
+                <td>{log.reason}</td>
+                <td>
+                  {log.created_at
+                    ? new Date(log.created_at).toLocaleString()
+                    : "N/A"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+)}
+
+{/* GROUPS PAGE */}
+{page === ("groups" as Page) && (
+  <GroupsPage token={token!} />
 )}
 
         {/* HELP PAGE */}

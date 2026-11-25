@@ -109,3 +109,238 @@ export function changePassword(
     body: JSON.stringify(payload),
   })
 }
+
+export function getAdminDashboardStats(token: string) {
+  return fetch(`${API_BASE_URL}/api/admin/dashboard/stats`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function getAdminUsers(token: string, page: number = 1, limit: number = 10) {
+  return fetch(
+    `${API_BASE_URL}/api/admin/users?page=${page}&limit=${limit}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+}
+
+
+export function banAdminUser(
+  token: string,
+  userId: number,
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/ban`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export function unbanAdminUser(
+  token: string,
+  userId: number,
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/unban`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export function updateAdminUserRole(
+  token: string,
+  userId: number,
+  role: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/${userId}/role`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ role }),
+  })
+}
+
+export function revokeAdminUserSessions(
+  token: string,
+  userId: number
+) {
+  return fetch(
+    `${API_BASE_URL}/api/admin/users/${userId}/sessions`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+}
+
+export function getAdminAuditLogs(token: string) {
+  return fetch(`${API_BASE_URL}/api/admin/audit-logs`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function bulkAdminUserAction(
+  token: string,
+  userIds: number[],
+  action: "ban" | "unban",
+  reason: string
+) {
+  return fetch(`${API_BASE_URL}/api/admin/users/bulk-action`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      user_ids: userIds,
+      action,
+      reason,
+    }),
+  })
+}
+
+export function getGroups(token: string) {
+  return fetch(`${API_BASE_URL}/api/groups`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function createGroup(token: string, name: string) {
+  return fetch(`${API_BASE_URL}/api/groups`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function addGroupMember(
+  token: string,
+  groupId: number,
+  email: string
+) {
+  return fetch(`${API_BASE_URL}/api/groups/${groupId}/members`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ email }),
+  })
+}
+
+export function getGroupMembers(token: string, groupId: number) {
+  return fetch(`${API_BASE_URL}/api/groups/${groupId}/members`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function updateGroupPermissions(
+  token: string,
+  groupId: number,
+  userId: number,
+  permissions: {
+    can_view: boolean
+    can_create: boolean
+    can_edit: boolean
+    can_delete: boolean
+    can_manage_members: boolean
+  }
+) {
+  return fetch(
+    `${API_BASE_URL}/api/groups/${groupId}/members/${userId}/permissions`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(permissions),
+    }
+  )
+}
+
+export function getGroupResources(token: string, groupId: number) {
+  return fetch(`${API_BASE_URL}/api/groups/${groupId}/resources`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export function createGroupResource(
+  token: string,
+  groupId: number,
+  title: string,
+  description: string
+) {
+  return fetch(`${API_BASE_URL}/api/groups/${groupId}/resources`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ title, description }),
+  })
+}
+
+export function updateGroupResource(
+  token: string,
+  groupId: number,
+  resourceId: number,
+  title: string,
+  description: string
+) {
+  return fetch(
+    `${API_BASE_URL}/api/groups/${groupId}/resources/${resourceId}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ title, description }),
+    }
+  )
+}
+
+export function deleteGroupResource(
+  token: string,
+  groupId: number,
+  resourceId: number
+) {
+  return fetch(
+    `${API_BASE_URL}/api/groups/${groupId}/resources/${resourceId}`,
+    {
+      method: "DELETE",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  )
+}
