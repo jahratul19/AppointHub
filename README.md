@@ -1,74 +1,90 @@
-# FastAPI + React Template
+# AppointHUB
 
-FastAPI backend + Vite/React/TypeScript frontend, deployed to Vercel as one project.
+AppointHUB is a multi-user healthcare appointment platform built with React, TypeScript, FastAPI and SQLAlchemy. It provides a public active-doctor directory, doctor-linked appointment booking, JWT authentication, account/session management, database-enforced roles, group permissions and an administrator workspace.
 
-```
-backend/    FastAPI app (routes under /api)
-frontend/   Vite + React + TypeScript
-vercel.json Vercel setup: /api/* goes to backend, everything else to frontend
-```
+## Project layout
 
-## Requirements
+- `backend/` — FastAPI API and SQLAlchemy models.
+- `frontend/` — React + TypeScript web app.
+- `docs/` — product, requirements and technical design documents.
+- `FINAL_REPORT.md` — consolidated project report.
 
-- [Python](https://www.python.org/downloads/) 3.10+
-- [Node.js](https://nodejs.org/) 22+
+## Local setup
 
-> On macOS/Linux, use `python3` instead of `python`.
+Use Python 3.10+ and Node.js 22+.
 
-## Run locally
+1. Copy `backend/.env.example` to `backend/.env` and set a persistent database URL, a unique `JWT_SECRET_KEY`, and a separate `PASSWORD_PEPPER`.
+2. Install backend dependencies and run the API:
 
-**Backend** (terminal 1):
+   ```powershell
+   cd backend
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   fastapi dev main.py
+   ```
 
-```bash
+   API docs are served at `http://localhost:8002/api/docs`.
+   The public directory is `GET /api/doctors`; doctor create/update/deactivate routes require an admin token under `/api/admin/doctors`.
+3. In another terminal, install and run the frontend:
+
+   ```powershell
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+   Local Vite requests proxy `/api` to the backend. `frontend/.env.example` is only needed when the frontend and API are deployed on different origins.
+
+## Environment and deployment
+
+Do not commit `.env` files, API keys, database credentials, or demo passwords. Use Vercel Environment Variables for production values:
+
+- `DATABASE_URL`: hosted PostgreSQL connection string with SSL; do not use an ephemeral SQLite file.
+- `JWT_SECRET_KEY` and `PASSWORD_PEPPER`: independently generated long random secrets.
+- `FRONTEND_ORIGINS`: comma-separated exact frontend origins if frontend and backend use different domains.
+- `COOKIE_SECURE=true` for HTTPS. The backend sets secure cookies automatically in Vercel when this variable is omitted.
+- `VITE_API_BASE_URL`: leave empty when the Vercel rewrite serves both app and API on one origin; otherwise set the API origin.
+
+Deploy from the `main` branch after all changes are reviewed and merged. The API docs path is `/api/docs`; the API OpenAPI schema is `/api/openapi.json`. Verify the deployed frontend, API health endpoint (`/api/health`), API docs, CORS, cookies, database persistence and reload/deep-link behavior on the actual Vercel URLs.
+
+This workspace change has not been pushed or deployed. Vercel project settings, hosted database provisioning and live URLs must be completed by the project owner.
+
+## Provisioning instructor demo data
+
+Set the `DEMO_ADMIN1_*`, `DEMO_ADMIN2_*`, and `DEMO_USER1_*` through `DEMO_USER3_*` values from `backend/.env.example` in a secure environment. Use demo-only passwords that satisfy the policy. Never place passwords in this repository or README.
+
+Run this against the intended persistent database only:
+
+```powershell
 cd backend
-python -m venv .venv
-.venv\Scripts\Activate.ps1      # macOS/Linux: source .venv/bin/activate
-pip install -r requirements.txt
-fastapi dev main.py
+python -m scripts.seed_demo_data
 ```
 
-**Frontend** (terminal 2):
+The script is repeatable and prints the generated IDs and roles, not passwords. It provisions two admins, three normal users, appointment records and a shared `AppointHUB Demo Team` owned by `demo_admin_1`. The owner can manage/delete the group and assign permissions; `demo_admin_2` can view/create, `demo_user_1` can view, `demo_user_2` can view/create, and `demo_user_3` can view/edit. The seeded owner alone can delete resources or manage team membership.
+It also provisions sample active doctors and doctor-linked bookings. On startup, an additive migration adds nullable `doctor_id` and `reason` columns to legacy appointment tables without removing existing records.
 
-```bash
+### Instructor account identifiers
+
+User IDs are database-generated and are not known until the demo seeding script has been run against the instructor's hosted database. After seeding, copy the five printed IDs and roles into the submission form; do not add passwords here.
+
+| Account | Role | User ID |
+| --- | --- | --- |
+| `demo_admin_1` | admin, group owner | Generated at provisioning |
+| `demo_admin_2` | admin | Generated at provisioning |
+| `demo_user_1` | user | Generated at provisioning |
+| `demo_user_2` | user | Generated at provisioning |
+| `demo_user_3` | user | Generated at provisioning |
+
+## Tests and build
+
+From the repository root:
+
+```powershell
+$env:PYTHONPATH = "backend"
+python -m pytest backend\tests -q
 cd frontend
-npm install
-npm run dev
+npm run build
 ```
 
-Open http://localhost:5173 and click **Say hello**. Vite forwards `/api` requests to the backend on port 8000.
-
-To run it the way Vercel does instead, from the project root:
-
-```bash
-npm install -g vercel
-vercel dev -L
-```
-
-> Add new Python packages to `backend/requirements.txt`.
-
-## Class exercise
-
-Send an ID, name and email from React to FastAPI and show the reply.
-
-1. In `backend/main.py`, uncomment the `EXERCISE (part 1)` block. Try `POST /api/user` at http://localhost:8000/docs.
-2. In `frontend/src/App.tsx`, uncomment `<UserForm />` and the `UserForm` function (`EXERCISE (part 2)`).
-3. Fill in the form at http://localhost:5173 and click **Send**.
-
-Try an invalid email (send it from `/docs`, since the browser blocks it in the form): FastAPI returns `422` without any extra code.
-
-## Deploy to Vercel
-
-1. Push the repo to GitHub.
-2. Go to https://vercel.com/new, import the repo and click **Deploy**. Keep **Root Directory** as `./`.
-
-Every push to `main` redeploys automatically. Or deploy from your machine with `vercel --prod`.
-
-If the frontend and backend are deployed on different domains, set `VITE_API_BASE_URL` in the frontend deployment to the backend origin (for example, `https://appoint-hub-wauz.vercel.app`) and set `FRONTEND_ORIGINS` in the backend deployment to the frontend origin. For local development, leave `VITE_API_BASE_URL` unset; Vite proxies `/api` to the local backend.
-
-## Troubleshooting
-
-- **"Running scripts is disabled" in PowerShell:** run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
-- **`fastapi` not found:** activate the virtual environment first.
-- **`Request failed: 500` in the app:** the backend isn't running.
-- **App at localhost:8000 shows an old version:** delete `frontend/dist`.
-- **Vercel build fails:** check **Build Logs** in the Vercel dashboard, and make sure `npm run build` works in `frontend/`.
+The project tests cover login, access-token rejection, refresh rotation/logout, admin role checks, record ownership, group-owner restrictions, doctor access/booking rules and legacy appointment migration.
