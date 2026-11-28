@@ -22,6 +22,9 @@ import {
   createGroupResource,
   updateGroupResource,
   deleteGroupResource,
+  renameGroup,
+  deleteGroup,
+  removeGroupMember,
 } from "../services/api"
 
 import "./GroupsPage.css"
@@ -30,6 +33,13 @@ type Group = {
   id: number
   name: string
   owner_id: number
+  permissions?: {
+    can_view: boolean
+    can_create: boolean
+    can_edit: boolean
+    can_delete: boolean
+    can_manage_members: boolean
+  }
 }
 
 type Member = {
@@ -51,24 +61,21 @@ type Resource = {
 
 type Props = {
   token: string
+  currentUserId: number | null
 }
 
 type Permission =
   | "can_view"
   | "can_create"
   | "can_edit"
-  | "can_delete"
-  | "can_manage_members"
 
 const permissionLabels: { key: Permission; label: string }[] = [
   { key: "can_view", label: "View" },
   { key: "can_create", label: "Create" },
   { key: "can_edit", label: "Edit" },
-  { key: "can_delete", label: "Delete" },
-  { key: "can_manage_members", label: "Manage members" },
 ]
 
-export default function GroupsPage({ token }: Props) {
+export default function GroupsPage({ token, currentUserId }: Props) {
   const [groups, setGroups] = useState<Group[]>([])
   const [selectedGroup, setSelectedGroup] = useState<number | null>(null)
   const [members, setMembers] = useState<Member[]>([])
@@ -77,6 +84,7 @@ export default function GroupsPage({ token }: Props) {
   const [canManageMembers, setCanManageMembers] = useState(false)
 
   const [groupName, setGroupName] = useState("")
+  const [renamedGroup, setRenamedGroup] = useState("")
   const [memberEmail, setMemberEmail] = useState("")
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -288,7 +296,51 @@ export default function GroupsPage({ token }: Props) {
     }
   }
 
+  async function handleRenameGroup() {
+    if (!selected || !renamedGroup.trim()) return
+    try {
+      const response = await renameGroup(token, selected.id, renamedGroup)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || "Could not rename group")
+      setMessage("Group renamed.")
+      setRenamedGroup("")
+      await loadGroups()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not rename group")
+    }
+  }
+
+  async function handleDeleteGroup() {
+    if (!selected || !window.confirm(`Delete "${selected.name}" and its resources?`)) return
+    try {
+      const response = await deleteGroup(token, selected.id)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || "Could not delete group")
+      setSelectedGroup(null)
+      setMessage("Group deleted.")
+      await loadGroups()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete group")
+    }
+  }
+
+  async function handleRemoveMember(userId: number) {
+    if (!selected || !window.confirm("Remove this member from the group?")) return
+    try {
+      const response = await removeGroupMember(token, selected.id, userId)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || "Could not remove member")
+      await loadGroupData(selected.id)
+      setMessage("Member removed.")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove member")
+    }
+  }
+
   const selected = groups.find((group) => group.id === selectedGroup)
+  const isOwner = selected?.owner_id === currentUserId
+  const canCreate = selected?.permissions?.can_create ?? isOwner
+  const canEdit = selected?.permissions?.can_edit ?? isOwner
   const owner = members.find((member) => member.user_id === selected?.owner_id)
   const regularMembers = members.filter(
     (member) => member.user_id !== selected?.owner_id,
@@ -403,6 +455,28 @@ export default function GroupsPage({ token }: Props) {
               <div>
                 <span className="groups-eyebrow">SELECTED TEAM</span>
                 <h3>{selected.name}</h3>
+                {isOwner && (
+                  <form
+                    className="groups-create-form"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void handleRenameGroup()
+                    }}
+                  >
+                    <input
+                      value={renamedGroup}
+                      onChange={(event) => setRenamedGroup(event.target.value)}
+                      placeholder="Rename group"
+                      aria-label="New group name"
+                    />
+                    <button className="groups-secondary-btn" type="submit" disabled={!renamedGroup.trim()}>
+                      Rename
+                    </button>
+                    <button className="groups-secondary-btn" type="button" onClick={() => void handleDeleteGroup()}>
+                      <Trash2 size={16} /> Delete group
+                    </button>
+                  </form>
+                )}
               </div>
               <span className="groups-team-icon">
                 <Users size={23} />
@@ -520,6 +594,15 @@ export default function GroupsPage({ token }: Props) {
                           </label>
                         ))}
                       </div>
+                      {canManageMembers && (
+                        <button
+                          type="button"
+                          className="groups-secondary-btn"
+                          onClick={() => void handleRemoveMember(member.user_id)}
+                        >
+                          Remove member
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -542,7 +625,7 @@ export default function GroupsPage({ token }: Props) {
               </div>
             </div>
 
-            <form
+            {canCreate || (editingResource !== null && canEdit) ? <form
               className="groups-resource-form"
               onSubmit={(event) => {
                 event.preventDefault()
@@ -586,7 +669,11 @@ export default function GroupsPage({ token }: Props) {
                   </button>
                 )}
               </div>
-            </form>
+            </form> : (
+              <p className="groups-muted-note">
+                You do not have permission to create or edit shared resources.
+              </p>
+            )}
 
             {resources.length === 0 ? (
               <div className="groups-empty groups-small-empty">
@@ -606,7 +693,7 @@ export default function GroupsPage({ token }: Props) {
                       <p>{resource.description}</p>
                     </div>
                     <div className="groups-resource-actions">
-                      <button
+                      {canEdit && <button
                         type="button"
                         className="groups-icon-btn"
                         aria-label={`Edit ${resource.title}`}
@@ -618,8 +705,8 @@ export default function GroupsPage({ token }: Props) {
                         }}
                       >
                         <Pencil size={17} />
-                      </button>
-                      <button
+                      </button>}
+                      {isOwner && <button
                         type="button"
                         className="groups-icon-btn groups-delete-btn"
                         aria-label={`Delete ${resource.title}`}
@@ -627,7 +714,7 @@ export default function GroupsPage({ token }: Props) {
                         onClick={() => handleDeleteResource(resource.id)}
                       >
                         <Trash2 size={17} />
-                      </button>
+                      </button>}
                     </div>
                   </article>
                 ))}

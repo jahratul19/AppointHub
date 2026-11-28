@@ -19,7 +19,7 @@ export default function AppointmentTable({
         <thead>
           <tr>
             <th>Customer</th>
-            <th>Provider</th>
+            <th>Doctor</th>
             <th>Date & time</th>
             <th>Status</th>
             <th>Actions</th>
@@ -31,6 +31,7 @@ export default function AppointmentTable({
             <tr key={appointment.id}>
               <td>
                 <strong>{appointment.customer_name}</strong>
+                {appointment.reason && <small>{appointment.reason}</small>}
                 <small>Appointment #{appointment.id}</small>
               </td>
 

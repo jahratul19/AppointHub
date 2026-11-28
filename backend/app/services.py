@@ -1,9 +1,11 @@
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func, update
 from datetime import datetime, timedelta, timezone
 
-from .models import Appointment, User, AuthSession
+from .models import Appointment, Doctor, User, AuthSession
+from .activity import recent_failed_logins, record_activity, request_ip
 
 from .schemas import (
     AppointmentCreate,
@@ -61,7 +63,10 @@ def refresh_user_session(refresh_token: str, db: Session):
 
     now = datetime.now(timezone.utc)
 
-    if old_session.expires_at <= now:
+    expires_at = old_session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at <= now:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Refresh token expired",
@@ -77,16 +82,40 @@ def refresh_user_session(refresh_token: str, db: Session):
             detail="User account is unavailable",
         )
 
-    old_session.revoked_at = now
-
-    access_token = create_access_token(
-        data={"sub": str(user.id), "role": user.role}
+    revoked = db.execute(
+        update(AuthSession)
+        .where(
+            AuthSession.id == old_session.id,
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > now,
+        )
+        .values(revoked_at=now)
+        .execution_options(synchronize_session=False)
     )
+    if revoked.rowcount != 1:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token has already been used",
+        )
 
-    new_refresh_token, new_session = create_user_session(
+    new_refresh_token = create_refresh_token()
+    new_session = AuthSession(
         user_id=user.id,
-        db=db,
+        refresh_token_hash=hash_refresh_token(new_refresh_token),
+        created_at=now,
+        expires_at=now + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
     )
+    db.add(new_session)
+    db.flush()
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "role": user.role,
+            "sid": str(new_session.id),
+        }
+    )
+    db.commit()
 
     return {
         "access_token": access_token,
@@ -95,7 +124,7 @@ def refresh_user_session(refresh_token: str, db: Session):
     }
 
 
-def logout_user_session(refresh_token: str, db: Session):
+def logout_user_session(refresh_token: str, db: Session) -> int | None:
     token_hash = hash_refresh_token(refresh_token)
 
     session = db.query(AuthSession).filter(
@@ -105,6 +134,8 @@ def logout_user_session(refresh_token: str, db: Session):
     if session and session.revoked_at is None:
         session.revoked_at = datetime.now(timezone.utc)
         db.commit()
+        return session.user_id
+    return session.user_id if session else None
 
 
 def get_user_sessions(user_id: int, db: Session):
@@ -146,13 +177,37 @@ def create_appointment_service(
     db: Session,
     current_user: User,
 ):
+    doctor = db.query(Doctor).filter(
+        Doctor.id == appointment.doctor_id,
+        Doctor.is_active.is_(True),
+    ).first()
+    if doctor is None:
+        existing_doctor = db.query(Doctor.id).filter(
+            Doctor.id == appointment.doctor_id
+        ).first()
+        if existing_doctor:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This doctor is not accepting new appointments",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found",
+        )
+
     db_appointment = Appointment(
-        **appointment.model_dump(),
+        customer_name=current_user.username,
+        provider_name=doctor.name,
+        doctor_id=doctor.id,
+        appointment_date=appointment.appointment_date,
+        appointment_time=appointment.appointment_time,
+        reason=appointment.reason.strip(),
+        status="Pending",
         user_id=current_user.id,
     )
 
     db.add(db_appointment)
-    db.commit()
+    db.flush()
     db.refresh(db_appointment)
 
     return db_appointment
@@ -207,8 +262,30 @@ def update_appointment_service(
         appointment_id, db, current_user
     )
 
-    for key, value in updated_data.model_dump().items():
-        setattr(appointment, key, value)
+    doctor = db.query(Doctor).filter(
+        Doctor.id == updated_data.doctor_id,
+        Doctor.is_active.is_(True),
+    ).first()
+    if doctor is None:
+        existing_doctor = db.query(Doctor.id).filter(
+            Doctor.id == updated_data.doctor_id
+        ).first()
+        if existing_doctor:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This doctor is not accepting new appointments",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found",
+        )
+
+    appointment.doctor_id = doctor.id
+    appointment.provider_name = doctor.name
+    appointment.appointment_date = updated_data.appointment_date
+    appointment.appointment_time = updated_data.appointment_time
+    appointment.reason = updated_data.reason.strip()
+    appointment.status = updated_data.status
 
     db.commit()
     db.refresh(appointment)
@@ -226,7 +303,6 @@ def delete_appointment_service(
     )
 
     db.delete(appointment)
-    db.commit()
 
     return {"message": "Appointment deleted successfully"}
 
@@ -249,8 +325,8 @@ def register_user_service(
         )
 
     new_user = User(
-        username=user_data.username,
-        email=user_data.email,
+        username=user_data.username.strip(),
+        email=str(user_data.email).strip().lower(),
         hashed_password=hash_password(user_data.password),
     )
 
@@ -264,15 +340,40 @@ def register_user_service(
 def login_user_service(
     user_data: UserLogin,
     db: Session,
+    request,
 ):
+    email = str(user_data.email).strip().lower()
+    ip_address = request_ip(request)
+    if recent_failed_logins(db, email, ip_address) >= 5:
+        record_activity(
+            db,
+            "failed_login",
+            request,
+            account_identifier=email,
+            details="Login temporarily rate-limited",
+        )
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Try again in 15 minutes.",
+        )
+
     user = db.query(User).filter(
-        User.email == user_data.email
+        func.lower(User.email) == email
     ).first()
 
     if not user or not verify_password(
         user_data.password,
         user.hashed_password,
     ):
+        record_activity(
+            db,
+            "failed_login",
+            request,
+            account_identifier=email,
+            details="Invalid credentials",
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -280,19 +381,40 @@ def login_user_service(
         )
 
     if user.is_banned:
+        record_activity(
+            db,
+            "failed_login",
+            request,
+            target_user_id=user.id,
+            account_identifier=email,
+            details="Banned account attempted login",
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Your account has been banned",
         )
 
-    access_token = create_access_token(
-        data={"sub": str(user.id), "role": user.role}
-    )
-
     refresh_token, new_session = create_user_session(
         user_id=user.id,
         db=db,
     )
+    access_token = create_access_token(
+        data={
+            "sub": str(user.id),
+            "role": user.role,
+            "sid": str(new_session.id),
+        }
+    )
+    record_activity(
+        db,
+        "login",
+        request,
+        actor_user_id=user.id,
+        target_user_id=user.id,
+        account_identifier=email,
+    )
+    db.commit()
 
     return {
         "access_token": access_token,
@@ -317,8 +439,8 @@ def update_user_profile_service(
             detail="Username or email already in use",
         )
 
-    current_user.username = user_data.username
-    current_user.email = user_data.email
+    current_user.username = user_data.username.strip()
+    current_user.email = str(user_data.email).strip().lower()
 
     db.commit()
     db.refresh(current_user)
@@ -330,11 +452,22 @@ def change_password_service(
     current_user: User,
     password_data: PasswordChange,
     db: Session,
+    request,
 ):
     if not verify_password(
         password_data.current_password,
         current_user.hashed_password,
     ):
+        record_activity(
+            db,
+            "failed_password_change",
+            request,
+            actor_user_id=current_user.id,
+            target_user_id=current_user.id,
+            account_identifier=current_user.email.lower(),
+            details="Current password did not match",
+        )
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Current password is incorrect",
@@ -353,6 +486,13 @@ def change_password_service(
     for session in active_sessions:
         session.revoked_at = datetime.now(timezone.utc)
 
+    record_activity(
+        db,
+        "password_change",
+        request,
+        actor_user_id=current_user.id,
+        target_user_id=current_user.id,
+    )
     db.commit()
 
     return {"message": "Password changed successfully"}

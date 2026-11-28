@@ -1,5 +1,5 @@
 
-import type { Appointment, AppointmentForm } from "../types"
+import type { Appointment, AppointmentForm, Doctor } from "../types"
 import type { FormEvent, ChangeEvent } from "react"
 import AppointmentTable from "../components/AppointmentTable"
 
@@ -11,11 +11,14 @@ type AppointmentsPageProps = {
   search: string
   filter: string
   filteredAppointments: Appointment[]
+  doctors: Doctor[]
+  doctorsLoading: boolean
+  doctorError: string
   onNewAppointment: () => void
   onCancelForm: () => void
   onSubmit: (e: FormEvent<HTMLFormElement>) => void
   onChange: (
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => void
   onSearchChange: (value: string) => void
   onFilterChange: (value: string) => void
@@ -23,6 +26,7 @@ type AppointmentsPageProps = {
   onView: (id: number) => void
   onEdit: (appointment: Appointment) => void
   onDelete: (id: number) => void
+  onBrowseDoctors: () => void
 }
 
 export default function AppointmentsPage({
@@ -33,6 +37,9 @@ export default function AppointmentsPage({
   search,
   filter,
   filteredAppointments,
+  doctors,
+  doctorsLoading,
+  doctorError,
   onNewAppointment,
   onCancelForm,
   onSubmit,
@@ -43,6 +50,7 @@ export default function AppointmentsPage({
   onView,
   onEdit,
   onDelete,
+  onBrowseDoctors,
 }: AppointmentsPageProps) {
   return (
     <>
@@ -60,6 +68,8 @@ export default function AppointmentsPage({
         </button>
       </section>
 
+      {doctorError && <p className="error" role="alert">{doctorError}</p>}
+
       {showForm && (
         <section className="form-card">
           <div className="section-heading">
@@ -68,7 +78,7 @@ export default function AppointmentsPage({
               <h2>
                 {editingId ? "Edit appointment" : "Create new appointment"}
               </h2>
-              <p>Enter the information below.</p>
+              <p>Select a doctor, date and time, and tell us what you need help with.</p>
             </div>
 
             <button className="close-btn" onClick={onCancelForm}>
@@ -78,25 +88,26 @@ export default function AppointmentsPage({
 
           <form onSubmit={onSubmit} className="appointment-form">
             <label>
-              Customer name
-              <input
-                name="customer_name"
-                value={form.customer_name}
+              Doctor
+              <select
+                name="doctor_id"
+                value={form.doctor_id}
                 onChange={onChange}
-                placeholder="Enter customer name"
                 required
-              />
-            </label>
-
-            <label>
-              Provider name
-              <input
-                name="provider_name"
-                value={form.provider_name}
-                onChange={onChange}
-                placeholder="Enter provider name"
-                required
-              />
+                disabled={doctorsLoading || doctors.length === 0}
+              >
+                <option value="">
+                  {doctorsLoading ? "Loading doctors..." : "Select a doctor"}
+                </option>
+                {doctors.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>
+                    {doctor.name} — {doctor.specialty}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="text-button" onClick={onBrowseDoctors}>
+                Browse doctor profiles
+              </button>
             </label>
 
             <label>
@@ -121,7 +132,21 @@ export default function AppointmentsPage({
               />
             </label>
 
-            <label>
+            <label className="appointment-reason-field">
+              Reason for visit
+              <textarea
+                name="reason"
+                value={form.reason}
+                onChange={onChange}
+                placeholder="Briefly describe the reason for your visit"
+                minLength={3}
+                maxLength={2000}
+                rows={4}
+                required
+              />
+            </label>
+
+            {editingId !== null && <label>
               Status
               <select name="status" value={form.status} onChange={onChange}>
                 <option>Pending</option>
@@ -129,7 +154,7 @@ export default function AppointmentsPage({
                 <option>Completed</option>
                 <option>Cancelled</option>
               </select>
-            </label>
+            </label>}
 
             <div className="form-actions">
               <button
