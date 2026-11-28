@@ -1,5 +1,6 @@
 import {
   getAppointments,
+  getDoctors,
   authenticate,
   saveAppointment,
   getAppointment,
@@ -16,17 +17,26 @@ import {
   revokeAdminUserSessions,
   getAdminAuditLogs,
   bulkAdminUserAction,
+  getMyProfile,
+  getMySessions,
+  revokeMySession,
+  getAdminUserDetail,
+  downloadAdminCsv,
 
 } from "./services/api"
 
 import HelpPage from "./pages/HelpPage"
 import GroupsPage from "./pages/GroupsPage"
 import AppointmentsPage from "./pages/AppointmentsPage"
+import DoctorDirectoryPage from "./pages/DoctorDirectoryPage"
+import AdminDoctorsPage from "./pages/AdminDoctorsPage"
 import DashboardPage from "./pages/DashboardPage"
 import AuthPage from "./pages/AuthPage"
-import { useEffect, useState, type FormEvent, type ChangeEvent } from "react"
+import AdminContentPage from "./pages/AdminContentPage"
+import AdminSecurityPage from "./pages/AdminSecurityPage"
+import { useEffect, useRef, useState, type FormEvent, type ChangeEvent } from "react"
 import AppointmentTable from "./components/AppointmentTable"
-import type { Appointment, AppointmentForm, Page, AuthMode } from "./types"
+import type { Appointment, AppointmentForm, Doctor, Page, AuthMode } from "./types"
 import HomePage from "./pages/HomePage"
 import {
   Eye,
@@ -45,12 +55,11 @@ import {
 import "./AdminDesign.css"
 
 const emptyForm: AppointmentForm = {
-  customer_name: "",
-  provider_name: "",
+  doctor_id: "",
   appointment_date: "",
   appointment_time: "",
+  reason: "",
   status: "Pending",
-
 }
 
 function getRoleFromToken(token: string): string {
@@ -75,11 +84,27 @@ function getRoleFromToken(token: string): string {
   }
 }
 
+function getUserIdFromToken(token: string): number | null {
+  try {
+    const encoded = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
+    const padded = encoded.padEnd(encoded.length + (4 - encoded.length % 4) % 4, "=")
+    const payload = JSON.parse(atob(padded))
+    const userId = Number(payload.sub)
+    return Number.isInteger(userId) ? userId : null
+  } catch {
+    return null
+  }
+}
+
 type AdminDashboardStats = {
   total_users: number
   banned_users: number
   total_appointments: number
   pending_appointments: number
+  total_groups: number
+  new_users_7d: number
+  new_records_7d: number
+  new_groups_7d: number
 }
 
 type AdminUser = {
@@ -107,12 +132,22 @@ type AdminUsersResponse = {
   total_pages: number
 }
 
+type AdminUserDetail = AdminUser & {
+  appointments: Appointment[]
+  groups: { id: number; name: string; owner_id: number }[]
+  sessions: { id: number; created_at: string; expires_at: string; revoked_at: string | null }[]
+  recent_activity: { event_type: string; ip_address: string | null; created_at: string | null; details: string }[]
+}
+
 export default function App() {
   const [usersPage, setUsersPage] = useState(1)
   const [usersTotalPages, setUsersTotalPages] = useState(1)
   const [usersTotal, setUsersTotal] = useState(0)
   const [auditLogs, setAuditLogs] = useState<AdminAuditLog[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [doctors, setDoctors] = useState<Doctor[]>([])
+  const [doctorsLoading, setDoctorsLoading] = useState(false)
+  const [doctorError, setDoctorError] = useState("")
   const [form, setForm] = useState<AppointmentForm>(emptyForm)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [selected, setSelected] = useState<Appointment | null>(null)
@@ -160,6 +195,13 @@ const [adminAppointmentFilter, setAdminAppointmentFilter] =
   const [selectedBulkUserIds, setSelectedBulkUserIds] = useState<number[]>([])
   const [bulkReason, setBulkReason] = useState("")
   const [bulkActionLoading, setBulkActionLoading] = useState(false)
+  const [sessionRestoring, setSessionRestoring] = useState(true)
+  const [mySessions, setMySessions] = useState<
+    { id: number; created_at: string; expires_at: string; revoked_at: string | null }[]
+  >([])
+  const [userDetail, setUserDetail] = useState<AdminUserDetail | null>(null)
+  const [userDetailLoading, setUserDetailLoading] = useState(false)
+  const restoreStarted = useRef(false)
 
 async function handleRoleChange() {
   if (!roleActionUser || !token) return
@@ -309,6 +351,63 @@ async function handleBulkUserAction(action: "ban" | "unban") {
   }
 }
 
+async function openUserDetails(user: AdminUser) {
+  if (!token) return
+  setSelectedAdminUser(user)
+  setUserDetail(null)
+  setUserDetailLoading(true)
+  try {
+    const response = await getAdminUserDetail(token, user.id)
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.detail || "Could not load user details")
+    setUserDetail(data as AdminUserDetail)
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Could not load user details")
+  } finally {
+    setUserDetailLoading(false)
+  }
+}
+
+async function exportUsersCsv() {
+  if (!token) return
+  try {
+    const response = await downloadAdminCsv(token, "users", {
+      search: searchTerm,
+      role: roleFilter,
+      status: statusFilter,
+    })
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.detail || "CSV export failed")
+    }
+    const url = URL.createObjectURL(await response.blob())
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "users.csv"
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "CSV export failed")
+  }
+}
+
+async function revokeMyLoginSession(sessionId: number) {
+  if (!token) return
+  try {
+    const response = await revokeMySession(token, sessionId)
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.detail || "Could not revoke session")
+    setMySessions((previous) => previous.map((session) =>
+      session.id === sessionId
+        ? { ...session, revoked_at: new Date().toISOString() }
+        : session,
+    ))
+    setMessage("Session revoked.")
+  } catch (err) {
+    setError(err instanceof Error ? err.message : "Could not revoke session")
+  }
+}
+
   async function loadAppointments() {
     setLoading(true)
     setError("")
@@ -320,7 +419,6 @@ async function handleBulkUserAction(action: "ban" | "unban") {
       if (!response.ok) {
         throw new Error("Could not load appointments")
       }
-
       const data: Appointment[] = await response.json()
       setAppointments(data)
     } catch (err) {
@@ -329,6 +427,27 @@ async function handleBulkUserAction(action: "ban" | "unban") {
       setLoading(false)
     }
   }
+
+  async function loadDoctors() {
+    setDoctorsLoading(true)
+    setDoctorError("")
+    try {
+      const response = await getDoctors()
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.detail || "Could not load doctors")
+      setDoctors(data)
+    } catch (err) {
+      setDoctorError(err instanceof Error ? err.message : "Could not load doctors")
+    } finally {
+      setDoctorsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (token && (page === "doctors" || (page === "appointments" && showForm))) {
+      void loadDoctors()
+    }
+  }, [token, page, showForm])
 
   // PROFILE AND PASSWORD STATE
 
@@ -340,24 +459,78 @@ async function handleBulkUserAction(action: "ban" | "unban") {
   const [newPassword, setNewPassword] = useState("")
   const [showAccount, setShowAccount] = useState(false)
 
-// RESTORE LOGIN SESSION AFTER PAGE RELOAD
-useEffect(() => {
-  async function restoreSession() {
-    try {
-      const response = await refreshAccessToken()
-
-      if (response.ok) {
-        const data = await response.json()
-        setToken(data.access_token)
-        setUserRole(getRoleFromToken(data.access_token))
+  // Restore from the httpOnly refresh cookie before rendering guest content.
+  useEffect(() => {
+    if (restoreStarted.current) return
+    restoreStarted.current = true
+    async function restoreSession() {
+      try {
+        const response = await refreshAccessToken()
+        if (response.ok) {
+          const data = await response.json()
+          setToken(data.access_token)
+          setUserRole(getRoleFromToken(data.access_token))
+        } else if (response.status !== 401) {
+          setError("Could not restore your session. Please try again.")
+        }
+      } catch {
+        setError("Could not connect to restore your session.")
+      } finally {
+        setSessionRestoring(false)
       }
-    } catch {
-      // User stays logged out if session restoration fails.
     }
-  }
+    void restoreSession()
+  }, [])
 
-  void restoreSession()
-}, [])
+  useEffect(() => {
+    const handleNewToken = (event: Event) => {
+      const newToken = (event as CustomEvent<string>).detail
+      if (!newToken) return
+      setToken(newToken)
+      setUserRole(getRoleFromToken(newToken))
+    }
+    const handleExpiredSession = () => {
+      setToken(null)
+      setUserRole("user")
+      setAppointments([])
+      setPage("overview")
+      setShowAccount(false)
+      setShowHome(false)
+      setAuthMode("login")
+      setMessage("")
+      setError("Your session expired. Please sign in again.")
+    }
+    window.addEventListener("app-access-token", handleNewToken)
+    window.addEventListener("app-session-expired", handleExpiredSession)
+    return () => {
+      window.removeEventListener("app-access-token", handleNewToken)
+      window.removeEventListener("app-session-expired", handleExpiredSession)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!token) return
+    Promise.all([getMyProfile(token), getMySessions(token)])
+      .then(async ([profileResponse, sessionsResponse]) => {
+        if (profileResponse.ok) {
+          const profile = await profileResponse.json()
+          setProfileUsername(profile.username)
+          setProfileEmail(profile.email)
+        }
+        if (sessionsResponse.ok) setMySessions(await sessionsResponse.json())
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "Could not load account data")
+      })
+  }, [token])
+
+  useEffect(() => {
+    if (!token || userRole === "admin") return
+    if (page === "admin-users" || page === "admin-content" ||
+        page === "admin-security" || page === "admin-audit-logs") {
+      setPage("overview")
+    }
+  }, [page, token, userRole])
 
   // LOAD APPOINTMENTS AFTER LOGIN
   useEffect(() => {
@@ -383,7 +556,7 @@ useEffect(() => {
       const data: AdminDashboardStats = await response.json()
       setAdminStats(data)
     } catch (error) {
-      console.error("Admin statistics error:", error)
+      setError(error instanceof Error ? error.message : "Could not load admin statistics")
     }
   }
 
@@ -400,7 +573,11 @@ useEffect(() => {
   setUsersLoading(true)
 
   try {
-    const response = await getAdminUsers(token!, usersPage, 10)
+    const response = await getAdminUsers(token!, usersPage, 10, {
+      search: searchTerm,
+      role: roleFilter,
+      status: statusFilter,
+    })
 
     if (!response.ok) {
       throw new Error("Failed to load admin users")
@@ -413,37 +590,14 @@ useEffect(() => {
     setUsersTotalPages(data.total_pages)
 
   } catch (error) {
-    console.error("Admin users error:", error)
+    setError(error instanceof Error ? error.message : "Could not load users")
   } finally {
     setUsersLoading(false)
   }
 }
 
   void loadAdminUsers()
-}, [token, userRole, usersPage])
-
-async function loadAuditLogs() {
-  if (!token || userRole !== "admin") return
-
-  try {
-    const response = await getAdminAuditLogs(token)
-
-    if (!response.ok) {
-      throw new Error("Failed to load audit logs")
-    }
-
-    const data = await response.json()
-    setAuditLogs(data)
-  } catch (error) {
-    console.error("Audit logs loading error:", error)
-  }
-}
-
-useEffect(() => {
-  if (page === "admin-audit-logs") {
-    void loadAuditLogs()
-  }
-}, [page, token, userRole])
+}, [token, userRole, usersPage, searchTerm, roleFilter, statusFilter])
 
   // AUTHENTICATION
   async function handleAuthSubmit(e: FormEvent<HTMLFormElement>) {
@@ -538,28 +692,48 @@ try {
       setMessage("Password changed successfully!")
       setCurrentPassword("")
       setNewPassword("")
+      await logoutApi()
+      setToken(null)
+      setUserRole("user")
+      setAppointments([])
+      setMySessions([])
+      setShowAccount(false)
+      setShowHome(false)
+      setAuthMode("login")
+      setMessage("Password changed. Please sign in again.")
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong")
     }
   }
   
-  function handleLogout() {
+  async function handleLogout() {
+    let logoutError = ""
+    try {
+      const response = await logoutApi()
+      if (!response.ok) {
+        const data = await response.json()
+        logoutError = data.detail || "The server could not revoke the session."
+      }
+    } catch {
+      logoutError = "Could not reach the server to revoke the session."
+    }
     setToken(null)
     setUserRole("user")
     setAppointments([])
+    setMySessions([])
     setSelected(null)
     setShowForm(false)
     setEditingId(null)
     setForm(emptyForm)
     setPage("overview")
-    setMessage("You have logged out successfully.")
-    setError("")
+    setMessage(logoutError ? "You are signed out locally." : "You have logged out successfully.")
+    setError(logoutError)
     setAuthMode("login")
     setShowHome(true)
   }
 
   function handleChange(
-    e: ChangeEvent<HTMLInputElement | HTMLSelectElement>
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
@@ -576,7 +750,10 @@ try {
     }
 
     const payload = {
-      ...form,
+      doctor_id: Number(form.doctor_id),
+      appointment_date: form.appointment_date,
+      reason: form.reason.trim(),
+      status: form.status,
       appointment_time:
         form.appointment_time.length === 5
           ? `${form.appointment_time}:00`
@@ -649,10 +826,10 @@ try {
     setSelected(null)
 
     setForm({
-      customer_name: appointment.customer_name,
-      provider_name: appointment.provider_name,
+      doctor_id: appointment.doctor_id === null ? "" : String(appointment.doctor_id),
       appointment_date: appointment.appointment_date,
       appointment_time: appointment.appointment_time.slice(0, 5),
+      reason: appointment.reason ?? "",
       status: appointment.status,
     })
 
@@ -711,7 +888,20 @@ try {
     setError("")
   }
 
+  function openBookingForDoctor(doctor: Doctor) {
+    setForm({ ...emptyForm, doctor_id: String(doctor.id) })
+    setEditingId(null)
+    setShowForm(true)
+    setPage("appointments")
+    setMessage("")
+    setError("")
+  }
+
   // AUTHENTICATION SCREEN
+  if (sessionRestoring) {
+    return <main className="app-loading" role="status">Restoring your session...</main>
+  }
+
   if (!token && showHome) {
   return (
     <HomePage
@@ -772,7 +962,8 @@ try {
   const filteredAppointments = appointments.filter((a) => {
     const matchesSearch =
       a.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      a.provider_name.toLowerCase().includes(search.toLowerCase())
+      a.provider_name.toLowerCase().includes(search.toLowerCase()) ||
+      (a.reason ?? "").toLowerCase().includes(search.toLowerCase())
 
     const matchesFilter =
       filter === "All" || a.status === filter
@@ -831,25 +1022,49 @@ return matchesSearch && matchesStatus && matchesRole
           >
             <span className="nav-icon">▤</span> Appointments
           </button>
-                    <button
-            className={`nav-item ${
-              page === "admin-users" ? "active" : ""
-            }`}
-            onClick={() => setPage("admin-users")}
-          >
-            <span className="nav-icon">♙</span> Users
-          </button>
           <button
-  className={`nav-item ${
-    page === "admin-audit-logs" ? "active" : ""
-  }`}
-  onClick={() => setPage("admin-audit-logs")}
->
-  <span className="nav-icon">▤</span> Audit Logs
-</button>
+            className={`nav-item ${page === "doctors" ? "active" : ""}`}
+            onClick={() => setPage("doctors")}
+          >
+            <span className="nav-icon">✚</span> Doctors
+          </button>
+          {userRole === "admin" && (
+            <>
+              <button
+                className={`nav-item ${page === "admin-doctors" ? "active" : ""}`}
+                onClick={() => setPage("admin-doctors")}
+              >
+                <span className="nav-icon">♙</span> Manage Doctors
+              </button>
+              <button
+                className={`nav-item ${page === "admin-users" ? "active" : ""}`}
+                onClick={() => setPage("admin-users")}
+              >
+                <span className="nav-icon">♙</span> Users
+              </button>
+              <button
+                className={`nav-item ${page === "admin-content" ? "active" : ""}`}
+                onClick={() => setPage("admin-content")}
+              >
+                <span className="nav-icon">▤</span> Content
+              </button>
+              <button
+                className={`nav-item ${page === "admin-security" ? "active" : ""}`}
+                onClick={() => setPage("admin-security")}
+              >
+                <span className="nav-icon">!</span> Security
+              </button>
+              <button
+                className={`nav-item ${page === "admin-audit-logs" ? "active" : ""}`}
+                onClick={() => setPage("admin-audit-logs")}
+              >
+                <span className="nav-icon">▤</span> Activity
+              </button>
+            </>
+          )}
 <button
   className="nav-item"
-  onClick={() => setPage("groups" as Page)}
+  onClick={() => setPage("groups")}
 >
   <span className="nav-icon">♧</span> Groups & Teams
 </button>
@@ -874,8 +1089,8 @@ return matchesSearch && matchesStatus && matchesRole
           <div className="profile">
             <div className="avatar">A</div>
             <div>
-              <strong>Administrator</strong>
-              <small>AppointHUB Admin</small>
+              <strong>{profileUsername || "Account"}</strong>
+              <small>{userRole === "admin" ? "Administrator" : "User"}</small>
             </div>
           </div>
         </div>
@@ -892,7 +1107,11 @@ return matchesSearch && matchesStatus && matchesRole
                 ? "Your workspace"
                 : page === "appointments"
                   ? "Appointments"
-                  : "Help center"}
+                  : page === "doctors"
+                    ? "Doctor directory"
+                    : page === "admin-doctors"
+                      ? "Manage doctors"
+                      : "Help center"}
             </h2>
           </div>
 
@@ -944,6 +1163,8 @@ return matchesSearch && matchesStatus && matchesRole
         value={profileUsername}
         onChange={(e) => setProfileUsername(e.target.value)}
         required
+        minLength={3}
+        maxLength={50}
       />
 
       <input
@@ -983,6 +1204,10 @@ return matchesSearch && matchesStatus && matchesRole
       value={newPassword}
       onChange={(e) => setNewPassword(e.target.value)}
       required
+      minLength={8}
+      maxLength={128}
+      pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,128}"
+      title="Use 8-128 characters with uppercase, lowercase and a number."
     />
     <button
   type="button"
@@ -995,6 +1220,27 @@ return matchesSearch && matchesStatus && matchesRole
 
   <button type="submit">Change Password</button>
 </form>
+
+    <h3>Signed-in sessions</h3>
+    {mySessions.length === 0 ? (
+      <p>No sessions found.</p>
+    ) : (
+      <ul className="account-session-list">
+        {mySessions.map((session) => (
+          <li key={session.id}>
+            <span>
+              Started {new Date(session.created_at).toLocaleString()} ·{" "}
+              {session.revoked_at ? "Revoked" : `Expires ${new Date(session.expires_at).toLocaleString()}`}
+            </span>
+            {!session.revoked_at && (
+              <button type="button" onClick={() => void revokeMyLoginSession(session.id)}>
+                Revoke
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    )}
   </div>
 )}
 
@@ -1065,6 +1311,11 @@ return matchesSearch && matchesStatus && matchesRole
             </div>
 
           </div>
+          <p>
+            {adminStats.total_groups} groups · New in 7 days:{" "}
+            {adminStats.new_users_7d} users, {adminStats.new_records_7d} records,{" "}
+            {adminStats.new_groups_7d} groups
+          </p>
 
           <section className="admin-quick-section">
             <div className="admin-section-heading">
@@ -1135,6 +1386,9 @@ return matchesSearch && matchesStatus && matchesRole
     search={search}
     filter={filter}
     filteredAppointments={filteredAppointments}
+    doctors={doctors}
+    doctorsLoading={doctorsLoading}
+    doctorError={doctorError}
     onNewAppointment={openNewForm}
     onCancelForm={cancelForm}
     onSubmit={handleSubmit}
@@ -1145,11 +1399,25 @@ return matchesSearch && matchesStatus && matchesRole
     onView={viewAppointment}
     onEdit={editAppointment}
     onDelete={deleteAppointment}
+    onBrowseDoctors={() => setPage("doctors")}
   />
 )}
 
+{page === "doctors" && (
+  <DoctorDirectoryPage
+    doctors={doctors}
+    loading={doctorsLoading}
+    error={doctorError}
+    onBook={openBookingForDoctor}
+  />
+)}
+
+{userRole === "admin" && page === "admin-doctors" && (
+  <AdminDoctorsPage token={token!} />
+)}
+
 {/* ADMIN USERS PAGE */}
-{page === "admin-users" && (
+{userRole === "admin" && page === "admin-users" && (
   <div className="admin-users-page">
     <h2>Manage Users</h2>
     <div className="users-controls">
@@ -1157,12 +1425,18 @@ return matchesSearch && matchesStatus && matchesRole
     type="text"
     placeholder="Search by username or email..."
     value={searchTerm}
-    onChange={(e) => setSearchTerm(e.target.value)}
+    onChange={(e) => {
+      setSearchTerm(e.target.value)
+      setUsersPage(1)
+    }}
   />
 
   <select
     value={statusFilter}
-    onChange={(e) => setStatusFilter(e.target.value)}
+    onChange={(e) => {
+      setStatusFilter(e.target.value)
+      setUsersPage(1)
+    }}
   >
     <option value="all">All Users</option>
     <option value="active">Active Users</option>
@@ -1170,12 +1444,16 @@ return matchesSearch && matchesStatus && matchesRole
   </select>
   <select
   value={roleFilter}
-  onChange={(e) => setRoleFilter(e.target.value)}
+  onChange={(e) => {
+    setRoleFilter(e.target.value)
+    setUsersPage(1)
+  }}
 >
   <option value="all">All Roles</option>
   <option value="admin">Admins</option>
   <option value="user">Users</option>
 </select>
+  <button type="button" onClick={() => void exportUsersCsv()}>Export CSV</button>
 </div>
     <p>View and manage registered users.</p>
 
@@ -1262,7 +1540,7 @@ return matchesSearch && matchesStatus && matchesRole
 
                   <button
   className="user-action-btn details-btn"
-  onClick={() => setSelectedAdminUser(user)}
+                  onClick={() => void openUserDetails(user)}
 >
   Details
 </button>
@@ -1390,8 +1668,48 @@ return matchesSearch && matchesStatus && matchesRole
       {selectedAdminUser.is_banned ? "Banned" : "Active"}
     </p>
 
+    {userDetailLoading ? <p>Loading user records...</p> : userDetail && (
+      <>
+        <h4>Appointments ({userDetail.appointments.length})</h4>
+        {userDetail.appointments.length === 0 ? <p>No appointments.</p> : (
+          <ul>{userDetail.appointments.map((item) => (
+            <li key={item.id}>
+              {item.customer_name} · {item.provider_name} · {item.status}
+            </li>
+          ))}</ul>
+        )}
+        <h4>Groups ({userDetail.groups.length})</h4>
+        {userDetail.groups.length === 0 ? <p>No groups.</p> : (
+          <ul>{userDetail.groups.map((group) => (
+            <li key={group.id}>{group.name} (ID {group.id})</li>
+          ))}</ul>
+        )}
+        <h4>Sessions ({userDetail.sessions.length})</h4>
+        {userDetail.sessions.length === 0 ? <p>No sessions.</p> : (
+          <ul>{userDetail.sessions.map((session) => (
+            <li key={session.id}>
+              Session {session.id}: {session.revoked_at ? "revoked" : "active"}
+              {" · "}{new Date(session.created_at).toLocaleString()}
+            </li>
+          ))}</ul>
+        )}
+        <h4>Recent activity</h4>
+        {userDetail.recent_activity.length === 0 ? <p>No recent activity.</p> : (
+          <ul>{userDetail.recent_activity.map((event, index) => (
+            <li key={`${event.event_type}-${index}`}>
+              {event.event_type} · {event.ip_address || "IP unavailable"} ·{" "}
+              {event.created_at ? new Date(event.created_at).toLocaleString() : "—"}
+            </li>
+          ))}</ul>
+        )}
+      </>
+    )}
+
     <button
-      onClick={() => setSelectedAdminUser(null)}
+      onClick={() => {
+        setSelectedAdminUser(null)
+        setUserDetail(null)
+      }}
     >
       Close
     </button>
@@ -1429,53 +1747,21 @@ return matchesSearch && matchesStatus && matchesRole
   </div>
 )}
 
-{/* ADMIN AUDIT LOGS PAGE */}
-{page === "admin-audit-logs" && (
-  <div className="admin-users-page">
-    <h2>Admin Audit Logs</h2>
-    <p>Review recent administrative actions.</p>
+{userRole === "admin" && page === "admin-content" && (
+  <AdminContentPage token={token!} />
+)}
 
-    {auditLogs.length === 0 ? (
-      <p>No audit logs found.</p>
-    ) : (
-      <div className="admin-users-table">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Admin</th>
-              <th>Target User</th>
-              <th>Action</th>
-              <th>Reason</th>
-              <th>Date & Time</th>
-            </tr>
-          </thead>
+{userRole === "admin" && page === "admin-security" && (
+  <AdminSecurityPage token={token!} mode="security" />
+)}
 
-          <tbody>
-            {auditLogs.map((log) => (
-              <tr key={log.id}>
-                <td>{log.id}</td>
-                <td>{log.admin_username}</td>
-                <td>{log.target_username}</td>
-                <td>{log.action}</td>
-                <td>{log.reason}</td>
-                <td>
-                  {log.created_at
-                    ? new Date(log.created_at).toLocaleString()
-                    : "N/A"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </div>
+{userRole === "admin" && page === "admin-audit-logs" && (
+  <AdminSecurityPage token={token!} mode="activity" />
 )}
 
 {/* GROUPS PAGE */}
-{page === ("groups" as Page) && (
-  <GroupsPage token={token!} />
+{page === "groups" && (
+  <GroupsPage token={token!} currentUserId={getUserIdFromToken(token!)} />
 )}
 
         {/* HELP PAGE */}
@@ -1524,6 +1810,9 @@ return matchesSearch && matchesStatus && matchesRole
             </p>
             <p>
               <strong>Time:</strong> {selected.appointment_time}
+            </p>
+            <p>
+              <strong>Reason for visit:</strong> {selected.reason || "Not recorded"}
             </p>
             <p>
               <strong>Status:</strong> {selected.status}

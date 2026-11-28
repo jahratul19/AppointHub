@@ -1,9 +1,19 @@
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, ForeignKey,
-    Integer, String, Time, func
+    Integer, String, Text, Time, func
 )
 from .database import Base
 
+
+class Doctor(Base):
+    __tablename__ = "doctors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(120), nullable=False, index=True)
+    photo_url = Column(String(1000), nullable=True)
+    specialty = Column(String(120), nullable=False, index=True)
+    description = Column(Text, nullable=False, default="")
+    is_active = Column(Boolean, nullable=False, default=True, server_default="true")
 
 
 class Appointment(Base):
@@ -12,9 +22,11 @@ class Appointment(Base):
     id = Column(Integer, primary_key=True, index=True)
     customer_name = Column(String(100), nullable=False)
     provider_name = Column(String(100), nullable=False)
+    doctor_id = Column(Integer, ForeignKey("doctors.id"), nullable=True, index=True)
     appointment_date = Column(Date, nullable=False)
     appointment_time = Column(Time, nullable=False)
     status = Column(String(30), default="Pending", nullable=False)
+    reason = Column(Text, nullable=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
 
@@ -58,6 +70,25 @@ class AdminModerationLog(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now()
+    )
+
+
+class UserActivity(Base):
+    __tablename__ = "user_activity"
+
+    id = Column(Integer, primary_key=True, index=True)
+    actor_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    target_user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    event_type = Column(String(50), nullable=False, index=True)
+    account_identifier = Column(String(254), nullable=True, index=True)
+    ip_address = Column(String(64), nullable=True, index=True)
+    user_agent = Column(String(500), nullable=True)
+    details = Column(Text, nullable=False, default="")
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True,
     )
 
 

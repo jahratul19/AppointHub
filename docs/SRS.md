@@ -1,288 +1,75 @@
-# AppointHUB — Software Requirements Specification (SRS)
+# AppointHUB — Software Requirements Specification
 
-## 1. Introduction
+## 1. Purpose and scope
 
-### 1.1 Purpose
+This specification defines the implemented and deployment requirements for AppointHUB, a React/TypeScript frontend and FastAPI backend for appointment management, shared team resources and administration.
 
-This document defines the functional and non-functional requirements for AppointHUB, a web-based appointment booking system. It serves as a reference for designing, developing, testing, and maintaining the application.
+## 2. Roles and authorization
 
-### 1.2 Scope
+The database stores the roles `user` and `admin`. Every protected route verifies a signed access token, the active server-side session and the current database user/ban state. Administrative routes require the admin role. Normal appointment access is restricted to the record owner; inaccessible records return 404. Group actions additionally require membership and the relevant permission. Only a group owner may manage members, rename/delete the group or delete group resources.
 
-AppointHUB will allow customers to browse service providers, view available appointment slots, and manage their bookings. Service providers will manage their availability and appointments, while administrators will manage user accounts and access permissions.
+## 3. Functional requirements
 
-### 1.3 Technology Stack
+### FR-01 Authentication and profile
 
-* Frontend: React.js with TypeScript
-* Backend: FastAPI with Python
-* Communication: REST APIs
-* Security: Authentication, authorization, RBAC, and security scopes
+The system shall allow signup/login, profile changes, password changes after current-password verification, logout, session listing and session revocation. Passwords shall be Argon2-hashed after server-side pepper preparation and shall never be stored as plaintext.
 
-## 2. User Roles
+### FR-02 Tokens and session lifecycle
 
-### 2.1 Customer
+Access JWTs shall expire within 15 minutes and include user ID and role claims. Refresh tokens shall be delivered only in an httpOnly cookie, stored hashed, rotated on refresh and revoked at logout/password change/session revocation. Requests using missing, invalid, expired or revoked sessions, or a banned account, shall receive 401.
 
-* Register and log in to the system.
-* View available service providers.
-* View available appointment slots.
-* Book appointments.
-* View and cancel their own appointments.
+### FR-03 Login abuse and event records
 
-### 2.2 Service Provider
+Failed logins shall be recorded with account identifier, IP, browser/user-agent and time. Five failed attempts within 15 minutes for an account or IP shall trigger temporary rate limiting. Login, failed login, logout, password change, role change, ban/unban, content deletion and exports shall be auditable.
 
-* Log in to the system.
-* Create and manage availability.
-* View appointments assigned to them.
-* Manage appointment status where permitted.
+### FR-04 Doctor directory and appointment booking
 
-### 2.3 Administrator
+The public `GET /api/doctors` endpoint shall return active doctors with name, photo URL, specialty and description. Admin-only endpoints shall create and update doctors and deactivate them. Authenticated users shall book an active doctor with appointment date/time and a required visit reason. The server shall derive the patient name from the authenticated account, store doctor ID and appointment status (initially `Pending`), and reject booking an inactive or missing doctor. Users may read, update and delete only their own appointments; administrators may inspect and moderate all appointments. Existing appointment rows shall be preserved when nullable `doctor_id` and `reason` columns are added.
 
-* Manage user accounts.
-* Assign and manage user roles.
-* Access administrative functions according to assigned permissions.
+### FR-05 Groups and shared resources
 
-## 3. Functional Requirements
+Users shall create groups and invite existing users. Group owners shall grant view/create/edit permissions to each member and shall be the only users allowed to add/remove members, change the group name, delete the group or delete shared resources. Members may access/create/edit resources only when their membership permissions allow.
 
-### FR-01: User Registration
+### FR-06 Administration
 
-The system shall allow a new customer to create an account by providing the required registration information.
+Administrators shall be able to:
 
-### FR-02: User Authentication
+- View totals for users, banned users, appointments, groups and recent activity.
+- Search/filter/paginate users by name/email, role and account status.
+- View a user's appointments, groups, sessions and recent events.
+- Ban/unban users with a reason, change another user's role, bulk ban/unban and revoke sessions.
+- Create, update and deactivate doctor profiles; inactive doctors shall not appear in the public directory or accept new bookings.
+- Search and moderate appointments/groups.
+- Inspect activity logs and failed login summaries by IP/account.
+- Export users, appointment records and filtered activity as CSV.
 
-The system shall authenticate users before granting access to protected resources.
+An administrator shall not change their own role or ban an administrator.
 
-### FR-03: Provider Listing
+### FR-07 Frontend session and navigation
 
-The system shall allow customers to view available service providers.
+The client shall wait for session restoration before rendering guest content. On an access-token 401 it shall refresh once and retry; if refresh fails it shall clear the client session and request login. Admin navigation shall be shown only for administrators.
 
-### FR-04: Availability Management
+## 4. Non-functional requirements
 
-The system shall allow authorized service providers to create and update their available appointment slots.
+- Production secrets are environment variables; only placeholder environment examples are versioned.
+- CORS allows configured frontend origins and local development origins only outside Vercel.
+- Production data uses a persistent hosted database.
+- User-facing views provide loading, error and empty states.
+- The appointment schema update shall retain legacy rows; pre-existing appointments may have no doctor/reason.
+- API docs are available at `/api/docs` and health is available at `/api/health`.
 
-### FR-05: Appointment Booking
+## 5. Error responses
 
-The system shall allow authenticated customers to book an available appointment slot.
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid operation or action |
+| 401 | Missing/invalid/expired/revoked authentication |
+| 403 | Authenticated but not authorized |
+| 404 | Resource missing or inaccessible due to ownership |
+| 409 | Duplicate account data |
+| 422 | Request validation failure |
+| 429 | Login rate limit reached |
 
-### FR-06: Appointment Conflict Prevention
+## 6. Verification criteria
 
-The system shall prevent multiple customers from booking the same appointment slot.
-
-### FR-07: Appointment Viewing
-
-The system shall allow customers to view their own appointments and service providers to view appointments assigned to them.
-
-### FR-08: Appointment Cancellation
-
-The system shall allow customers to cancel their own eligible appointments according to the system's booking rules.
-
-### FR-09: User and Role Management
-
-The system shall allow authorized administrators to manage user accounts and role assignments.
-
-### FR-10: Authorization
-
-The system shall verify user roles, permissions, and resource ownership before allowing restricted actions.
-
-## 4. Non-Functional Requirements
-
-### NFR-01: Security
-
-Passwords shall be stored using a secure password-hashing mechanism. Protected endpoints shall require authentication and appropriate authorization.
-
-### NFR-02: Usability
-
-The user interface shall provide clear navigation and understandable feedback for successful actions and errors.
-
-### NFR-03: Reliability
-
-The system shall validate appointment availability before confirming a booking and shall handle conflicting booking requests safely.
-
-### NFR-04: Maintainability
-
-The frontend and backend shall be organized into modular components and maintainable code structures.
-
-### NFR-05: Performance
-
-Common operations, such as viewing provider listings and appointments, should respond within a reasonable time under normal usage.
-
-### NFR-06: Data Integrity
-
-The system shall validate incoming data and maintain consistent appointment and user records.
-
-## 5. Security and Access Control
-
-* Authentication shall identify the currently logged-in user.
-* Role-Based Access Control (RBAC) shall restrict functionality according to the user's role.
-* Security scopes and permissions shall restrict access to protected operations.
-* Customers shall not access or modify another customer's appointments.
-* Service providers shall not manage another provider's availability or appointments without explicit authorization.
-* Administrative endpoints shall only be accessible to authorized administrators.
-* The backend shall enforce access controls independently of frontend restrictions.
-
-## 6. Proposed REST API Requirements
-
-| Method | Endpoint                                | Purpose                                  |
-| ------ | --------------------------------------- | ---------------------------------------- |
-| POST   | `/api/v1/auth/register`                        | Register a customer                      |
-| POST   | `/api/v1/auth/token`                           | Authenticate and obtain an access token  |
-| GET    | `/api/v1/auth/me`                              | Retrieve the current user's profile      |
-| GET    | `/api/v1/providers`                            | List service providers                   |
-| GET    | `/api/v1/providers/{provider_id}/slots`        | View available appointment slots         |
-| POST   | `/api/v1/appointments`                         | Book an appointment                      |
-| GET    | `/api/v1/appointments/mine`                    | View the current customer's appointments |
-| PATCH  | `/api/v1/appointments/{appointment_id}/cancel` | Cancel an eligible appointment           |
-| GET    | `/api/v1/provider/appointments`                | View the provider's appointments         |
-| POST   | `/api/v1/provider/availability`                | Create provider availability             |
-| GET    | `/api/v1/admin/users`                          | List users for authorized administrators |
-
-These endpoints describe the proposed API design and may be refined during implementation.
-
-## 7. Validation and Error Handling
-
-The system shall validate request data and return appropriate HTTP status codes.
-
-* `200 OK`: Request completed successfully.
-* `201 Created`: A resource was created successfully.
-* `400 Bad Request`: The request is invalid.
-* `401 Unauthorized`: Authentication is required or invalid.
-* `403 Forbidden`: The user lacks the required permission.
-* `404 Not Found`: The requested resource does not exist or is unavailable to the requester.
-* `409 Conflict`: The requested appointment slot is no longer available.
-* `422 Unprocessable Entity`: Request data fails validation.
-
-Error responses should provide clear messages without exposing sensitive system information.
-
-## 8. Assumptions and Constraints
-
-* Users must have an appropriate account to access protected features.
-* Appointment availability must be checked before booking confirmation.
-* The initial release focuses on core booking and access-control functionality.
-* Online payments, video consultations, and AI-based features are outside the initial scope.
-* Database technology and detailed deployment configuration will be finalized during technical design.
-
-## 9. Acceptance Criteria
-
-* Customers can register, authenticate, and manage their own appointments.
-* Service providers can manage their availability and view assigned appointments.
-* Administrators can perform authorized user-management tasks.
-* The system prevents conflicting bookings.
-* Protected resources enforce authentication, roles, permissions, and ownership checks.
-* Invalid requests return appropriate error responses.
-## 10. Use Cases
-
-### UC-01: User Registration
-
-* **Primary Actor:** Visitor
-* **Precondition:** The visitor does not already have an account.
-* **Main Flow:**
-  1. The visitor opens the registration page.
-  2. The visitor enters the required registration information.
-  3. The frontend sends the registration request to the backend.
-  4. The backend validates the information.
-  5. The system creates the user account and returns a success response.
-* **Alternative Flow:** If the information is invalid or the account already exists, the system returns an appropriate error message.
-* **Postcondition:** A new customer account is created successfully.
-
-### UC-02: User Login
-
-* **Primary Actor:** Registered User
-* **Precondition:** The user has a registered account.
-* **Main Flow:**
-  1. The user opens the login page.
-  2. The user enters their login credentials.
-  3. The frontend sends the credentials to the backend.
-  4. The backend verifies the credentials.
-  5. The system returns an authentication response.
-* **Alternative Flow:** If the credentials are invalid, the system returns an authentication error.
-* **Postcondition:** The user is authenticated and can access authorized features.
-
-### UC-03: View Service Providers
-
-* **Primary Actor:** Customer
-* **Precondition:** The application is accessible.
-* **Main Flow:**
-  1. The customer opens the service provider listing page.
-  2. The frontend requests the provider list from the backend.
-  3. The backend retrieves the available service providers.
-  4. The frontend displays the provider information.
-* **Alternative Flow:** If no providers are available, the system displays an appropriate message.
-* **Postcondition:** The customer can view available service providers.
-
-### UC-04: View Available Appointment Slots
-
-* **Primary Actor:** Customer
-* **Precondition:** The selected service provider has availability information.
-* **Main Flow:**
-  1. The customer selects a service provider.
-  2. The frontend requests the provider's available appointment slots.
-  3. The backend retrieves the available slots.
-  4. The frontend displays the available appointment slots.
-* **Alternative Flow:** If no appointment slots are available, the system displays an appropriate message.
-* **Postcondition:** The customer can view available appointment slots.
-
-### UC-05: Manage Provider Availability
-
-* **Primary Actor:** Service Provider
-* **Precondition:** The service provider is authenticated and authorized.
-* **Main Flow:**
-  1. The service provider opens the availability management page.
-  2. The provider enters or updates availability information.
-  3. The frontend sends the request to the backend.
-  4. The backend validates the information and authorization.
-  5. The system saves the availability information.
-* **Alternative Flow:** If the information is invalid or permission is denied, the system returns an appropriate error.
-* **Postcondition:** The provider's availability is created or updated successfully.
-
-### UC-06: Book an Appointment
-
-* **Primary Actor:** Customer
-* **Precondition:** The customer is authenticated and the selected appointment slot is available.
-* **Main Flow:**
-  1. The customer selects a service provider and an available appointment slot.
-  2. The customer submits the booking request.
-  3. The frontend sends the request to the backend.
-  4. The backend validates the request and checks slot availability.
-  5. The backend creates the appointment.
-  6. The system returns a booking confirmation.
-* **Alternative Flow:** If the selected slot is already booked or the request is invalid, the system returns an appropriate error.
-* **Postcondition:** The appointment is successfully booked.
-
-### UC-07: View Appointments
-
-* **Primary Actor:** Customer or Service Provider
-* **Precondition:** The user is authenticated.
-* **Main Flow:**
-  1. The user opens the appointment management page.
-  2. The frontend requests the relevant appointment records.
-  3. The backend verifies the user's identity and permissions.
-  4. The backend retrieves the authorized appointment records.
-  5. The frontend displays the appointment information.
-* **Alternative Flow:** If no appointments are found, the system displays an appropriate message.
-* **Postcondition:** The user can view appointments they are authorized to access.
-
-### UC-08: Cancel an Appointment
-
-* **Primary Actor:** Customer
-* **Precondition:** The customer is authenticated and owns an eligible appointment.
-* **Main Flow:**
-  1. The customer opens their appointment list.
-  2. The customer selects an eligible appointment.
-  3. The customer confirms the cancellation.
-  4. The frontend sends the cancellation request to the backend.
-  5. The backend verifies ownership and cancellation rules.
-  6. The system processes the cancellation and returns a response.
-* **Alternative Flow:** If the appointment does not exist, is not eligible for cancellation, or belongs to another user, the system returns an appropriate error.
-* **Postcondition:** The eligible appointment is cancelled successfully.
-
-### UC-09: Manage User Accounts and Roles
-
-* **Primary Actor:** Administrator
-* **Precondition:** The administrator is authenticated and has the required permissions.
-* **Main Flow:**
-  1. The administrator opens the user management page.
-  2. The frontend requests the user records from the backend.
-  3. The backend verifies administrative permissions.
-  4. The system displays the authorized user information.
-  5. The administrator performs an authorized user or role management action.
-  6. The backend validates and processes the requested action.
-* **Alternative Flow:** If the administrator lacks permission or the requested information is invalid, the system returns an appropriate error.
-* **Postcondition:** The authorized user-management action is completed successfully.
+Pytest covers invalid login, token rejection, refresh rotation/logout, role access, banned-user rejection, appointment ownership and group-owner restrictions. Deployment acceptance additionally requires live Vercel URLs, a persistent database, seeded demo users/group and browser verification; local test results alone do not satisfy the deployment requirement.

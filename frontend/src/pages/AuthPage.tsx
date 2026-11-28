@@ -96,7 +96,10 @@ export default function AuthPage({
               onChange={(e) => onPasswordChange(e.target.value)}
               placeholder="Enter your password"
               required
-              minLength={8}
+              minLength={authMode === "register" ? 8 : 1}
+              maxLength={128}
+              pattern={authMode === "register" ? "(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9]).{8,128}" : undefined}
+              title={authMode === "register" ? "Use 8-128 characters with uppercase, lowercase and a number." : undefined}
             />
           </label>
 
