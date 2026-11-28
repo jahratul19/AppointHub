@@ -1,132 +1,63 @@
-# AppointHUB — Product Requirements Document (PRD)
+# AppointHUB — Product Requirements Document
 
-## 1. Project Overview
+## 1. Product overview
 
-AppointHUB is a web-based appointment booking system designed to make scheduling and managing appointments simple, organized, and accessible. It provides a centralized platform where users can discover available service providers, book appointments, and manage their bookings.
+AppointHUB is a healthcare appointment application with a doctor directory, secure user accounts, administrator moderation and shared group resources. Patients browse active doctors and book appointments with a selected doctor.
 
-## 2. Problem Statement
+## 2. Problem and goals
 
-Managing appointments manually can be time-consuming and may lead to scheduling conflicts, missed information, and difficulties tracking bookings. AppointHUB aims to simplify this process through an organized digital booking system.
+Appointments kept across separate tools are difficult to track and can expose one user's information to another. AppointHUB centralizes appointments and shared team resources while enforcing identity, ownership and permission checks on the backend.
 
-## 3. Project Goals
+Product goals:
 
-* Provide a simple and user-friendly appointment booking experience.
-* Allow users to view available service providers and appointment slots.
-* Enable users to book, view, and cancel their appointments.
-* Allow service providers to manage their availability and appointments.
-* Provide administrators with tools to manage users and system access.
-* Protect user information through authentication and role-based authorization.
+- Provide a responsive sign-up/login and account-management experience.
+- Let patients browse doctors and book appointments with a selected active doctor.
+- Let administrators maintain doctor profiles and availability status.
+- Protect individual appointments and account data from other ordinary users.
+- Let group owners share selected resources with different member permissions.
+- Give administrators tools for account management, content moderation, security review and reporting.
+- Support persistent hosted deployment through Vercel and a hosted relational database.
 
-## 4. Target Users
+## 3. User types
 
-### 4.1 Customers
+- **User:** manages their own profile and sessions, browses active doctors, books/manages their own appointments, and accesses permitted group resources.
+- **Administrator:** manages users, sessions, doctors, records and groups and can inspect audit/security information.
+- **Group owner:** creates, renames and deletes a group; adds/removes members and grants view/create/edit permissions.
+- **Group member:** participates in shared work only within the permissions assigned by the group owner.
 
-Customers can create accounts, browse service providers, view availability, book appointments, and manage their own bookings.
+## 4. Main product requirements
 
-### 4.2 Service Providers
+### Accounts and security
 
-Service providers can manage their availability and view appointments assigned to them.
+- Signup and login with Argon2 password hashing and a server-side password pepper.
+- Short-lived signed access tokens and rotating, revocable httpOnly refresh sessions.
+- Profile updates, password changes requiring the current password, session listing/revocation and logout.
+- Rate-limited failed login attempts and activity records for security-relevant events.
 
-### 4.3 Administrators
+### Appointments and groups
 
-Administrators can manage user accounts, assign appropriate roles, and oversee platform access.
+- The public doctor directory displays active doctors' names, profile photos, specialties and descriptions.
+- Administrators create, update and deactivate doctor profiles; inactive doctors are excluded from the directory and cannot receive new bookings.
+- Authenticated users book an active doctor by selecting an appointment date/time and providing a visit reason. The server records the user, doctor and appointment status.
+- Users create, view, update and delete their own appointments; existing appointment records are preserved when doctor/reason columns are introduced.
+- Administrators can moderate all appointment records.
+- Group members can have distinct view/create/edit permissions.
+- The group owner alone can rename/delete the group, manage members and delete shared resources.
 
-## 5. Core Features
+### Administrator workspace
 
-* User registration and login
-* Role-based access control
-* Service provider listing
-* Appointment availability management
-* Appointment booking and cancellation
-* Personal appointment history
-* Provider appointment management
-* Administrative user management
+- Dashboard statistics, searchable and filterable user lists, pagination and user details.
+- Ban/unban with a reason, role updates, bulk actions and session revocation.
+- Appointment/group moderation, failed-login summaries, searchable activity logs and filtered CSV exports.
 
-## 6. Technology Stack
+## 5. Out of scope
 
-* Frontend: React.js with TypeScript
-* Backend: FastAPI with Python
-* Communication: REST APIs
-* Security: Authentication, authorization, RBAC, and permission-based access
+Online payments, provider time-slot availability scheduling, notification delivery, and health-record storage are not part of this project version. A selected date/time is recorded, but the system does not prevent scheduling conflicts.
 
-## 7. Scope
+## 6. Success criteria
 
-The initial version will focus on user accounts, provider availability, appointment booking, appointment management, and access control. Advanced features such as online payments, video consultations, and AI-based recommendations are outside the initial scope.
+The project is successful when protected actions are denied by backend checks when identity, ownership, role or group permission is missing; account sessions can be invalidated; admin activity is reviewable; and the deployed Vercel application is verified against a persistent database.
 
-## 8. Security Requirements
+## 7. Release and demo requirements
 
-* Users must authenticate before accessing protected features.
-* Access must be restricted according to user roles and permissions.
-* Customers must only manage their own appointments.
-* Service providers must only access appointments and availability they are authorized to manage.
-* Administrative functions must be restricted to authorized administrators.
-
-## 9. Success Criteria
-
-* Users can register and log in successfully.
-* Customers can view availability and manage their appointments.
-* Service providers can manage their availability and appointments.
-* Unauthorized users cannot access restricted resources.
-* The system provides a clear and consistent appointment booking workflow.
-
-## 10. Assumptions
-
-This document describes the planned requirements for the initial version of AppointHUB. Features and implementation details may be refined during development.
-## 11. User Stories
-
-### 11.1 Customer
-
-* As a customer, I want to register an account so that I can use the appointment booking system.
-* As a customer, I want to log in securely so that I can access my personal account.
-* As a customer, I want to browse service providers so that I can choose a suitable provider.
-* As a customer, I want to view available appointment slots so that I can select a convenient time.
-* As a customer, I want to book an appointment so that I can reserve a service.
-* As a customer, I want to view my appointment history so that I can track my bookings.
-* As a customer, I want to update or cancel my appointments so that I can manage changes to my schedule.
-
-### 11.2 Service Provider
-
-* As a service provider, I want to log in securely so that I can access my provider account.
-* As a service provider, I want to manage my availability so that customers can book suitable time slots.
-* As a service provider, I want to view my assigned appointments so that I can manage my schedule.
-
-### 11.3 Administrator
-
-* As an administrator, I want to manage user accounts so that I can maintain the platform.
-* As an administrator, I want to assign appropriate user roles so that access is controlled.
-* As an administrator, I want to oversee platform access so that unauthorized activities can be restricted.
-
-## 12. Project Milestones
-
-### Milestone 1: Requirement Analysis and Planning
-
-* Define project objectives, scope, and target users.
-* Identify functional and non-functional requirements.
-* Prepare PRD, SRS, and TDD documentation.
-
-### Milestone 2: Backend Development
-
-* Set up the FastAPI backend.
-* Design database models and relationships.
-* Implement authentication and authorization.
-* Develop REST API endpoints for the required features.
-
-### Milestone 3: Frontend Development
-
-* Set up the React.js and TypeScript frontend.
-* Develop user authentication interfaces.
-* Build service provider listing and appointment management interfaces.
-* Implement role-based frontend access.
-
-### Milestone 4: Frontend and Backend Integration
-
-* Connect frontend components with backend REST APIs.
-* Implement appointment booking and management workflows.
-* Handle API responses, validation, and errors.
-
-### Milestone 5: Testing and Deployment
-
-* Test CRUD operations and API endpoints.
-* Verify authentication, authorization, and role-based permissions.
-* Fix identified bugs.
-* Deploy the application and verify its functionality.
+The repository includes an idempotent demo-data provisioning script for two admins, three normal users, appointment records and a shared mixed-permission group. Production secrets/passwords remain outside version control. Generated user IDs, live URLs, screenshots/PDF and the demo video must be collected after hosted provisioning and deployment.

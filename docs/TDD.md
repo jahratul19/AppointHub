@@ -1,256 +1,69 @@
-# AppointHUB — Technical Design Document (TDD)
+# AppointHUB — Technical Design Document
 
-## 1. Introduction
+## 1. Architecture
 
-### 1.1 Purpose
+AppointHUB uses a React + TypeScript SPA, a FastAPI REST API and SQLAlchemy persistence. The frontend calls API functions in one service layer. FastAPI validates request schemas, authenticates the caller, enforces RBAC/ownership/group permissions and performs database operations.
 
-This document describes the proposed technical architecture, system components, API design, security model, and implementation approach for AppointHUB.
+## 2. Components
 
-### 1.2 System Overview
+- `frontend/src/App.tsx`: session restoration, workspace navigation, appointments, account management and admin user workflows.
+- `frontend/src/services/api.ts`: API calls, one-time refresh/retry after 401 and session-expired notifications.
+- `frontend/src/pages/GroupsPage.tsx`: shared groups and member resource permissions.
+- `frontend/src/pages/DoctorDirectoryPage.tsx`: active doctor browsing and booking selection.
+- `frontend/src/pages/AdminDoctorsPage.tsx`: administrator doctor create/update/deactivate workflows.
+- `frontend/src/pages/AppointmentsPage.tsx`: doctor selection and patient appointment details.
+- `frontend/src/pages/AdminContentPage.tsx`: appointment/group moderation and filtered record export.
+- `frontend/src/pages/AdminSecurityPage.tsx`: activity log, activity export and failed-login summaries.
+- `backend/app/security.py`: Argon2/pepper password handling, JWT and refresh token primitives.
+- `backend/app/rbac.py`: role constants and group permission checks.
+- `backend/app/routes.py`: API routes, current user/admin dependencies, ownership checks and admin workflows.
+- `backend/app/services.py`: authentication/session and appointment business logic, including active-doctor validation.
+- `backend/app/models.py`: users, doctors, appointments, sessions, groups, resources, moderation and activity data.
+- `backend/app/migrations.py`: additive migration for legacy appointment doctor/reason columns.
+- `backend/app/activity.py`: request metadata and login rate-limit activity queries.
 
-AppointHUB is a web-based appointment booking system. It will use a React.js frontend with TypeScript and a FastAPI backend written in Python. The frontend will communicate with the backend through REST APIs.
+## 3. Authentication data flow
 
-This document describes the planned design. Implementation details may be adjusted during development.
+1. Password policy is validated before account creation/change.
+2. The password is combined with an environment-sourced pepper and stored as an Argon2 hash.
+3. Login creates a hashed refresh-session record and an access JWT with `sub`, `role`, `sid`, and `exp`.
+4. Protected routes decode the JWT, load the referenced unrevoked/unexpired session and verify the current user is not banned.
+5. Refresh atomically revokes the old refresh session and creates a replacement; replayed tokens fail.
+6. Logout, password change, ban, role changes and session revocation invalidate sessions. The session ID check makes access tokens unusable immediately after revocation.
 
-## 2. Technology Stack
+## 4. Data model
 
-* Frontend: React.js
-* Programming Language: TypeScript
-* Backend Framework: FastAPI
-* Backend Language: Python
-* API Style: REST
-* Data Validation: TypeScript types on the frontend and Pydantic models on the backend
-* Authentication: Token-based authentication
-* Authorization: Role-Based Access Control (RBAC), security scopes, and resource ownership checks
-* Database: To be finalized during implementation
+- **User:** unique username/email, Argon2 password hash, `user`/`admin` role and ban status.
+- **Appointment:** appointment fields and owning user ID.
+- **Doctor:** name, optional photo URL, specialty, description and active status.
+- **Appointment:** owning user, nullable doctor foreign key, date, time, reason and status. Doctor/reason columns remain nullable for legacy records; new booking requests require an active doctor and a visit reason.
+- **AuthSession:** user ID, unique refresh-token hash, creation/expiry/revocation timestamps.
+- **Group / GroupMember:** group owner and each member's view/create/edit permissions.
+- **GroupResource:** resource content, group and creator.
+- **AdminModerationLog:** ban/unban/role management history.
+- **UserActivity:** actor/target, event, account identifier, IP, user-agent, details and timestamp.
 
-## 3. System Architecture
+`Base.metadata.create_all` creates newly introduced tables. `migrate_appointment_doctor_fields` adds nullable doctor/reason columns to existing appointment tables without deleting or rewriting their rows. Production schema changes should continue to use an explicit migration process if future changes alter existing columns.
 
-The system will follow a client-server architecture.
+## 5. API surface
 
-### 3.1 Frontend Layer
+API routes are under `/api`. Major route groups include:
 
-The React.js application will provide the user interface for customers, service providers, and administrators.
+- `/api/auth/*`: register, login, refresh, logout, current profile, profile update, password change and sessions.
+- `/api/appointments/*`: user-owned appointment CRUD.
+- `/api/doctors`: public list of active doctors.
+- `/api/admin/doctors`: admin-only doctor list/create/update/deactivate.
+- `/api/groups/*`: group membership, owner-only management, permissions and shared resources.
+- `/api/admin/*`: dashboard, user list/details/actions, activity/security, content moderation and CSV exports.
 
-Responsibilities include:
+OpenAPI documentation is available at `/api/docs`, schema at `/api/openapi.json`, and health at `/api/health`.
 
-* Displaying provider listings and appointment availability.
-* Providing registration and login forms.
-* Allowing customers to manage their appointments.
-* Allowing providers to manage availability and appointments.
-* Providing administrative interfaces for authorized users.
-* Communicating with backend endpoints and displaying API responses.
+## 6. Deployment and configuration
 
-### 3.2 Backend Layer
+Vercel routes `/api/*` to FastAPI and the remaining paths to Vite. Production requires hosted persistent PostgreSQL, separate long random `JWT_SECRET_KEY` and `PASSWORD_PEPPER`, HTTPS secure cookies and exact frontend CORS origins when split origins are used. Same-origin frontend/API deployments can leave `VITE_API_BASE_URL` empty.
 
-The FastAPI application will handle business logic and expose REST API endpoints.
+Never store credentials in source control. `.env.example` files contain placeholders. Demo accounts are provisioned by `backend/scripts/seed_demo_data.py` using environment-only passwords; generated IDs are printed for the final submission, and the script never prints passwords.
 
-Responsibilities include:
+## 7. Testing and release
 
-* Validating incoming requests.
-* Authenticating users.
-* Enforcing roles, scopes, permissions, and resource ownership.
-* Managing provider availability and appointment bookings.
-* Preventing conflicting bookings.
-* Returning appropriate HTTP status codes and response data.
-
-### 3.3 Data Layer
-
-The data layer will store user accounts, roles, provider profiles, availability slots, and appointment records.
-
-A relational database is a suitable option because these entities have structured relationships. The specific database technology will be selected during implementation.
-
-## 4. Proposed Data Model
-
-### 4.1 User
-
-* `id`: Unique user identifier
-* `name`: User's display name
-* `email`: Unique email address
-* `password_hash`: Securely hashed password
-* `role`: Customer, provider, or administrator
-* `created_at`: Account creation timestamp
-
-### 4.2 ProviderProfile
-
-* `id`: Unique provider profile identifier
-* `user_id`: Reference to the provider's user account
-* `service_name`: Name of the service provided
-* `description`: Optional service description
-
-### 4.3 AvailabilitySlot
-
-* `id`: Unique slot identifier
-* `provider_id`: Reference to the service provider
-* `start_time`: Appointment start time
-* `end_time`: Appointment end time
-* `is_available`: Availability status
-
-### 4.4 Appointment
-
-* `id`: Unique appointment identifier
-* `customer_id`: Reference to the customer
-* `provider_id`: Reference to the service provider
-* `start_time`: Appointment start time
-* `end_time`: Appointment end time
-* `status`: Booked, cancelled, or completed
-* `created_at`: Booking creation timestamp
-
-These models describe the proposed design and may be refined to match the final database schema.
-
-## 5. REST API Design
-
-The backend will expose versioned REST endpoints under `/api/v1`.
-
-| Method | Endpoint                                       | Purpose                                  |
-| ------ | ---------------------------------------------- | ---------------------------------------- |
-| POST   | `/api/v1/auth/register`                        | Register a customer                      |
-| POST   | `/api/v1/auth/token`                           | Authenticate and obtain an access token  |
-| GET    | `/api/v1/auth/me`                              | Get the current user's profile           |
-| GET    | `/api/v1/providers`                            | List service providers                   |
-| GET    | `/api/v1/providers/{provider_id}/slots`        | View provider availability               |
-| POST   | `/api/v1/appointments`                         | Book an appointment                      |
-| GET    | `/api/v1/appointments/mine`                    | View the customer's appointments         |
-| PATCH  | `/api/v1/appointments/{appointment_id}/cancel` | Cancel an appointment                    |
-| GET    | `/api/v1/provider/appointments`                | View the provider's appointments         |
-| POST   | `/api/v1/provider/availability`                | Create availability slots                |
-| GET    | `/api/v1/admin/users`                          | List users for authorized administrators |
-
-These endpoints are proposed. The final API implementation should remain consistent with the SRS.
-
-## 6. Authentication and Authorization
-
-### 6.1 Authentication Flow
-
-1. A user submits valid login credentials.
-2. The backend verifies the credentials.
-3. The backend issues an access token if authentication succeeds.
-4. The frontend uses the token when calling protected endpoints.
-5. The backend validates the token before processing protected requests.
-
-Passwords must never be stored in plain text. Token handling and storage must follow appropriate security practices.
-
-### 6.2 Role-Based Access Control
-
-The system will support three primary roles:
-
-* **Customer:** Browse providers and manage their own appointments.
-* **Provider:** Manage their own availability and assigned appointments.
-* **Administrator:** Manage users and perform authorized administrative operations.
-
-### 6.3 Security Scopes and Permissions
-
-FastAPI security scopes and permission checks will be used to restrict access to protected operations.
-
-Example proposed scopes:
-
-* `appointments:read`
-* `appointments:book`
-* `appointments:cancel`
-* `availability:manage`
-* `provider:appointments:read`
-* `users:manage`
-
-The backend must also verify resource ownership. A valid role or token alone must not allow a customer to access another customer's appointment.
-
-## 7. Appointment Booking Workflow
-
-1. The customer selects a service provider.
-2. The frontend requests available appointment slots.
-3. The customer selects a slot and submits a booking request.
-4. The backend authenticates the customer and validates the request.
-5. The backend checks that the slot is still available.
-6. The backend safely creates the appointment and prevents conflicting bookings.
-7. The frontend displays the booking result.
-
-Availability checks and booking creation should be handled safely to prevent two users from booking the same slot concurrently.
-
-## 8. Error Handling
-
-The backend will return consistent HTTP responses.
-
-* `200 OK`: Successful request.
-* `201 Created`: Resource created.
-* `400 Bad Request`: Invalid request.
-* `401 Unauthorized`: Authentication required or invalid.
-* `403 Forbidden`: Insufficient permissions.
-* `404 Not Found`: Resource not found.
-* `409 Conflict`: Appointment slot conflict.
-* `422 Unprocessable Entity`: Request validation failure.
-* `500 Internal Server Error`: Unexpected server error.
-
-Error responses must not reveal passwords, tokens, stack traces, or other sensitive information.
-
-## 9. Frontend and Backend Integration
-
-* The frontend will call backend REST endpoints through a shared API service layer.
-* TypeScript interfaces or types will represent API request and response structures.
-* FastAPI and Pydantic will validate backend requests and responses.
-* The frontend will display loading, success, and error states.
-* The backend will remain responsible for enforcing all security rules.
-* Cross-Origin Resource Sharing (CORS) will be configured for the permitted frontend origin.
-
-## 10. Testing Strategy
-
-### 10.1 Frontend Testing
-
-Test form validation, navigation, appointment workflows, and API error handling.
-
-### 10.2 Backend Testing
-
-Use automated tests to verify authentication, permissions, input validation, booking rules, and API responses.
-
-### 10.3 Integration Testing
-
-Verify that the React frontend communicates correctly with the FastAPI backend.
-
-### 10.4 Security Testing
-
-Verify that unauthorized users cannot access protected endpoints or modify resources belonging to other users.
-
-## 11. Development and Deployment Considerations
-
-* Keep configuration values and secrets outside source code.
-* Use environment variables for environment-specific settings.
-* Configure allowed frontend origins explicitly.
-* Maintain clear separation between frontend and backend responsibilities.
-* Document setup and execution instructions as the implementation evolves.
-
-## 12. Future Enhancements
-
-Potential future enhancements include appointment reminders, notifications, payment integration, and reporting. These features are outside the initial implementation scope unless approved separately.
-## 13. Project Structure
-
-The project will be organized into separate frontend and backend directories to maintain a clear separation of responsibilities and improve maintainability.
-
-```text
-AppointHUB/
-├── docs/
-│   ├── PRD.md
-│   ├── SRS.md
-│   └── TDD.md
-│
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── types/
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── public/
-│   ├── package.json
-│   └── tsconfig.json
-│
-├── backend/
-│   ├── app/
-│   │   ├── api/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── core/
-│   │   └── main.py
-│   └── requirements.txt
-│
-├── .gitignore
-└── README.md
+Backend tests exercise authentication, session revocation, role and ownership enforcement, group owner rules, login abuse controls, doctor authorization, active-doctor booking and legacy appointment migration. The frontend is type-checked and built with the Vite production build. Release acceptance still requires deployment from `main`, live URL/browser checks, hosted demo provisioning, screenshots/PDF and the recorded demo video.
